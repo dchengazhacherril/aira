@@ -1,3 +1,6 @@
+from sms import send_sms
+
+
 def main():
     guest_name = "Taylor"
     guest_message = "Hi! What time is check-in tomorrow?"
@@ -9,9 +12,10 @@ def main():
     print(f"Message: {guest_message}")
     print()
 
-    reply = input("Type your reply: ")
-    print()
-    print(f"Reply sent to {guest_name}: {reply}")
+    text_message = f"Guest {guest_name} says: {guest_message}"
+    print("Sending this guest message to your phone...")
+    message_sid = send_sms(text_message)
+    print(f"SMS sent. Message SID: {message_sid}")
 
 
 if __name__ == "__main__":
