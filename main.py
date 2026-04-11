@@ -1,0 +1,1 @@
+print("Aira is starting 🚀")
