@@ -4,7 +4,10 @@ from dotenv import load_dotenv
 from twilio.rest import Client
 
 
-load_dotenv()
+LOCAL_ENV_PATH = os.path.join(".local", ".env")
+
+
+load_dotenv(LOCAL_ENV_PATH)
 
 
 def send_sms(message_text):
@@ -16,12 +19,12 @@ def send_sms(message_text):
 
     if not account_sid or not auth_token or not to_phone:
         raise ValueError(
-            "Missing Twilio settings. Add them to your .env file before sending an SMS."
+            "Missing Twilio settings. Add them to .local/.env before sending an SMS."
         )
 
     if not messaging_service_sid and not from_phone:
         raise ValueError(
-            "Add either TWILIO_MESSAGING_SERVICE_SID or TWILIO_PHONE_NUMBER to your .env file."
+            "Add either TWILIO_MESSAGING_SERVICE_SID or TWILIO_PHONE_NUMBER to .local/.env."
         )
 
     client = Client(account_sid, auth_token)

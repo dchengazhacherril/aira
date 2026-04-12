@@ -12,25 +12,30 @@ from googleapiclient.errors import HttpError
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 AIRBNB_SENDER = "express@airbnb.com"
+LOCAL_DIR = ".local"
+CREDENTIALS_PATH = os.path.join(LOCAL_DIR, "credentials.json")
+TOKEN_PATH = os.path.join(LOCAL_DIR, "token.json")
 
 
 def get_gmail_service():
     creds = None
 
-    if os.path.exists("token.json"):
-        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+    if os.path.exists(TOKEN_PATH):
+        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
             flow = InstalledAppFlow.from_client_secrets_file(
-                "credentials.json",
+                CREDENTIALS_PATH,
                 SCOPES,
             )
             creds = flow.run_local_server(port=0)
 
-        with open("token.json", "w") as token_file:
+        os.makedirs(LOCAL_DIR, exist_ok=True)
+
+        with open(TOKEN_PATH, "w") as token_file:
             token_file.write(creds.to_json())
 
     return build("gmail", "v1", credentials=creds)

@@ -72,7 +72,7 @@ Follow Google's Gmail API Python quickstart for a desktop app:
 - Configure the OAuth consent screen
 - Create an OAuth client for a Desktop app
 - Download the OAuth client file as `credentials.json`
-- Put `credentials.json` in the project root
+- Put `credentials.json` in `.local/credentials.json`
 
 ### 2. Install dependencies
 
@@ -82,6 +82,18 @@ It is safest to use a local virtual environment:
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
+
+Put your local secrets in a local-only folder:
+
+```bash
+mkdir -p .local
+```
+
+Examples:
+
+- `.local/credentials.json`
+- `.local/token.json`
+- `.local/.env`
 
 ### 3. Run the app
 
