@@ -12,7 +12,6 @@ from googleapiclient.errors import HttpError
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 AIRBNB_SENDER = "express@airbnb.com"
-AIRBNB_AUTOMATED_SENDER = "automated@airbnb.com"
 LOCAL_DIR = ".local"
 CREDENTIALS_PATH = os.path.join(LOCAL_DIR, "credentials.json")
 TOKEN_PATH = os.path.join(LOCAL_DIR, "token.json")
@@ -162,6 +161,12 @@ def extract_message_sender(clean_body, subject):
             if len(possible_name) < 60:
                 return clean_text(possible_name)
 
+        if line.upper().startswith("RESERVATION FOR"):
+            if index + 1 < len(lines):
+                possible_name = lines[index + 1]
+                if len(possible_name) < 60:
+                    return clean_text(possible_name)
+
         if line.lower().startswith("hi ") and index > 0:
             possible_name = lines[index - 1]
             if len(possible_name) < 60 and not possible_name.lower().startswith("re:"):
@@ -209,7 +214,7 @@ def extract_sender_role(clean_body):
     lines = [line for line in clean_body.splitlines() if line.strip()]
 
     for index, line in enumerate(lines):
-        if line.upper() == "YOU’VE GOT A NEW MESSAGE":
+        if line.upper() in {"YOU’VE GOT A NEW MESSAGE"} or line.upper().startswith("RESERVATION FOR"):
             for next_line in lines[index + 1:index + 4]:
                 lower_line = next_line.lower()
                 if lower_line in {"co-host", "cohost", "guest", "host"}:
@@ -222,6 +227,7 @@ def extract_guest_message_body(email_body):
     clean_body = remove_noise_lines(email_body)
 
     patterns = [
+        r"(?s)RESERVATION FOR[^\n]*\n\s*[^\n]+\n\s*(?:Co-host|Cohost|Guest|Host)\s+(.+?)\s*(?:Reply|You can also respond|$)",
         r"(?s)YOU’VE GOT A NEW MESSAGE\s+[^\n]+\s+(?:Co-host|Cohost|Guest|Host)\s+(.+?)\s*(?:Reply|You can also respond|$)",
         r"(?s)^\s*(?:RE:.*?\n+)?[^\n]+\n\s*Hi [^\n,]+,\s*(.+?)\s*(?:Respond to|RESERVATION DETAILS|$)",
         r"(?s)Message from .*?:\s*(.+?)\s*(?:Reply|RESERVATION DETAILS|$)",
@@ -241,7 +247,13 @@ def extract_guest_message_body(email_body):
         lower_line = line.lower()
         if lower_line.startswith("re:"):
             continue
+        if lower_line.startswith("reservation for"):
+            continue
+        if lower_line in {"host", "guest", "co-host", "cohost"}:
+            continue
         if "reservation details" in lower_line or "check-in" in lower_line or "check-out" in lower_line:
+            continue
+        if "you can also respond by replying directly to this email" in lower_line:
             continue
         filtered_lines.append(line)
 
@@ -328,61 +340,3 @@ def get_newest_message_by_query(query):
 
 def get_newest_unread_airbnb_email():
     return get_newest_message_by_query(f"from:{AIRBNB_SENDER} is:unread")
-
-
-def extract_onboarding_host_name(subject, body):
-    return find_first_match(
-        f"{subject}\n{body}",
-        [
-            r"Thanks for accepting\s+(.+?)'s invite",
-            r"You accepted\s+(.+?)'s invite",
-        ],
-    )
-
-
-def extract_onboarding_listing_name(body):
-    return find_first_match(
-        body,
-        [
-            r"rooms/\d+[^\n]*\n\n([^\n]+)\n\n[^\n]+\n\nAddress",
-            r"\n([^\n]+)\n\nAddress\n",
-            r"Listing\s*:\s*(.+)",
-            r"listing called\s+(.+)",
-            r"for the listing\s+(.+)",
-            r"on the listing\s+(.+)",
-        ],
-    )
-
-
-def extract_onboarding_listing_address(body):
-    return find_first_match(
-        body,
-        [
-            r"Address\s+([^\n]+)",
-        ],
-    )
-
-
-def get_latest_host_onboarding_info():
-    invite_email = get_newest_message_by_query(
-        f'from:{AIRBNB_AUTOMATED_SENDER} "accepting" "invite"'
-    )
-    if not invite_email:
-        return None
-
-    host_name = extract_onboarding_host_name(
-        invite_email["subject"],
-        invite_email["body"],
-    )
-    listing_name = extract_onboarding_listing_name(invite_email["body"])
-    listing_address = extract_onboarding_listing_address(invite_email["body"])
-
-    if not host_name and not listing_name and not listing_address:
-        return None
-
-    return {
-        "host_name": host_name,
-        "listing_name": listing_name,
-        "listing_address": listing_address,
-        "subject": invite_email["subject"],
-    }

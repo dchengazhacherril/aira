@@ -1,9 +1,5 @@
-from email_reader import (
-    get_latest_host_onboarding_info,
-    get_newest_unread_airbnb_email,
-    parse_airbnb_email,
-)
-from host_memory import load_host_memory, rename_host_folder, update_host_profile
+from email_reader import get_newest_unread_airbnb_email, parse_airbnb_email
+from host_memory import load_host_memory
 from reply_engine import generate_reply_plan
 from sms import send_sms
 
@@ -74,44 +70,9 @@ def get_final_reply_text(host_input, reply_plan):
     return normalized_input
 
 
-def sync_host_profile_from_onboarding_email():
-    onboarding_info = get_latest_host_onboarding_info()
-    if not onboarding_info:
-        return None
-
-    new_host_id = rename_host_folder(onboarding_info.get("host_name", ""))
-    updated_profile = update_host_profile(
-        {
-            "host_name": onboarding_info.get("host_name", ""),
-            "listing_name": onboarding_info.get("listing_name", ""),
-            "listing_address": onboarding_info.get("listing_address", ""),
-        },
-        host_id=new_host_id,
-    )
-
-    return {
-        "host_id": new_host_id,
-        "host_name": updated_profile.get("host_name", ""),
-        "listing_name": updated_profile.get("listing_name", ""),
-        "listing_address": updated_profile.get("listing_address", ""),
-        "subject": onboarding_info.get("subject", ""),
-    }
-
-
 def main():
     print("Aira")
     print()
-    onboarding_sync = sync_host_profile_from_onboarding_email()
-
-    if onboarding_sync:
-        print("Host profile sync")
-        print("-----------------")
-        print(f"Host folder: {onboarding_sync['host_id']}")
-        print(f"Host name: {onboarding_sync['host_name'] or 'Not found'}")
-        print(f"Listing name: {onboarding_sync['listing_name'] or 'Not found'}")
-        print(f"Listing address: {onboarding_sync['listing_address'] or 'Not found'}")
-        print()
-
     print("Checking Gmail for the newest unread Airbnb email...")
     print()
 

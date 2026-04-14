@@ -1,17 +1,20 @@
+import re
+
+
 def classify_message(message_text):
     text = message_text.lower()
 
-    keyword_map = [
-        ("parking", ["parking", "park", "garage", "car"]),
-        ("wifi", ["wifi", "wi-fi", "internet", "password"]),
-        ("check_in", ["check in", "check-in", "arrival", "arrive"]),
-        ("check_out", ["check out", "check-out", "checkout"]),
-        ("lockout", ["locked out", "lock out", "cant get in", "can't get in", "door code"]),
+    pattern_map = [
+        ("parking", [r"\bparking\b", r"\bgarage\b", r"\bpark\b"]),
+        ("wifi", [r"\bwifi\b", r"\bwi-fi\b", r"\binternet\b", r"\bpassword\b"]),
+        ("check_in", [r"\bcheck in\b", r"\bcheck-in\b", r"\barrival\b", r"\barrive\b"]),
+        ("check_out", [r"\bcheck out\b", r"\bcheck-out\b", r"\bcheckout\b"]),
+        ("lockout", [r"\blocked out\b", r"\block out\b", r"\bcant get in\b", r"\bcan't get in\b", r"\bdoor code\b"]),
     ]
 
-    for label, keywords in keyword_map:
-        for keyword in keywords:
-            if keyword in text:
+    for label, patterns in pattern_map:
+        for pattern in patterns:
+            if re.search(pattern, text):
                 return label
 
     return "other"

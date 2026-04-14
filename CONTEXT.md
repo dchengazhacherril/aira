@@ -85,6 +85,7 @@ Each onboarded host should have:
 - `playbooks.json` for situation handling rules
 
 Keep this structure simple and local-first.
+For now, host profiles are created manually. Do not build automatic host detection or onboarding sync from `automated@airbnb.com`.
 
 ## Current Reply Loop
 

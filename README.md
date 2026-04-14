@@ -71,6 +71,8 @@ Current structure:
 
 For now, Aira uses this memory to classify messages and generate simple suggested replies.
 
+For the MVP, create these host folders manually. Aira does not automatically create or rename host folders.
+
 ## Reply Loop
 
 The current reply loop is intentionally simple:
