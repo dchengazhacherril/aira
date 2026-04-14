@@ -12,6 +12,7 @@ from googleapiclient.errors import HttpError
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 AIRBNB_SENDER = "express@airbnb.com"
+AIRBNB_AUTOMATED_SENDER = "automated@airbnb.com"
 LOCAL_DIR = ".local"
 CREDENTIALS_PATH = os.path.join(LOCAL_DIR, "credentials.json")
 TOKEN_PATH = os.path.join(LOCAL_DIR, "token.json")
@@ -289,14 +290,14 @@ def parse_airbnb_email(email_body, subject=""):
     }
 
 
-def get_newest_unread_airbnb_email():
+def get_newest_message_by_query(query):
     try:
         service = get_gmail_service()
 
         results = service.users().messages().list(
             userId="me",
             labelIds=["INBOX"],
-            q=f"from:{AIRBNB_SENDER} is:unread",
+            q=query,
             maxResults=1,
         ).execute()
 
@@ -323,3 +324,65 @@ def get_newest_unread_airbnb_email():
     except HttpError as error:
         print(f"Gmail API error: {error}")
         return None
+
+
+def get_newest_unread_airbnb_email():
+    return get_newest_message_by_query(f"from:{AIRBNB_SENDER} is:unread")
+
+
+def extract_onboarding_host_name(subject, body):
+    return find_first_match(
+        f"{subject}\n{body}",
+        [
+            r"Thanks for accepting\s+(.+?)'s invite",
+            r"You accepted\s+(.+?)'s invite",
+        ],
+    )
+
+
+def extract_onboarding_listing_name(body):
+    return find_first_match(
+        body,
+        [
+            r"rooms/\d+[^\n]*\n\n([^\n]+)\n\n[^\n]+\n\nAddress",
+            r"\n([^\n]+)\n\nAddress\n",
+            r"Listing\s*:\s*(.+)",
+            r"listing called\s+(.+)",
+            r"for the listing\s+(.+)",
+            r"on the listing\s+(.+)",
+        ],
+    )
+
+
+def extract_onboarding_listing_address(body):
+    return find_first_match(
+        body,
+        [
+            r"Address\s+([^\n]+)",
+        ],
+    )
+
+
+def get_latest_host_onboarding_info():
+    invite_email = get_newest_message_by_query(
+        f'from:{AIRBNB_AUTOMATED_SENDER} "accepting" "invite"'
+    )
+    if not invite_email:
+        return None
+
+    host_name = extract_onboarding_host_name(
+        invite_email["subject"],
+        invite_email["body"],
+    )
+    listing_name = extract_onboarding_listing_name(invite_email["body"])
+    listing_address = extract_onboarding_listing_address(invite_email["body"])
+
+    if not host_name and not listing_name and not listing_address:
+        return None
+
+    return {
+        "host_name": host_name,
+        "listing_name": listing_name,
+        "listing_address": listing_address,
+        "subject": invite_email["subject"],
+    }

@@ -59,6 +59,34 @@ Simple heuristic:
 - If the sender matches the `hosted by ...` name, it is likely a host-originated message and Aira should ignore it
 - If you are only the guest on the reservation, Aira should ignore it
 
+## Host Memory
+
+Each host should have a small structured memory folder so Aira can stay organized as more hosts onboard.
+
+Current structure:
+
+- `.local/hosts/<host_id>/profile.json`: static listing facts like Wi-Fi, check-in time, parking, and listing name
+- `.local/hosts/<host_id>/preferences.json`: learned host style like tone and sign-off
+- `.local/hosts/<host_id>/playbooks.json`: simple handling rules for common situations like parking, Wi-Fi, check-in, check-out, or lockout
+
+For now, Aira uses this memory to classify messages and generate simple suggested replies.
+
+## Reply Loop
+
+The current reply loop is intentionally simple:
+
+- Aira reads the newest unread Airbnb email
+- Aira classifies the message
+- Aira generates a suggested reply when grounded host facts exist
+- Aira marks low-confidence cases for manual review
+- Aira sends the message summary to the host by SMS
+- The host can reply with:
+  - `SEND` to use the suggested reply
+  - `SKIP` to do nothing
+  - any other text to use that text as an edited reply
+
+For now, the final reply is only simulated locally in the terminal. Sending the reply back through Airbnb email is not built yet.
+
 ## Gmail Setup
 
 This project now includes the first Gmail integration step: read the newest unread Airbnb email from Gmail, parse it, and send relevant host-side messages to your phone with Twilio.
@@ -94,6 +122,7 @@ Examples:
 - `.local/credentials.json`
 - `.local/token.json`
 - `.local/.env`
+- `.local/hosts/`
 
 ### 3. Run the app
 

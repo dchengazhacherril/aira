@@ -58,6 +58,7 @@ Do not build yet:
 
 - Python for core logic
 - Plain scripts and small modules
+- JSON files for per-host memory
 - Environment variables via `.env`
 - Minimal dependencies
 - No frameworks unless there is a strong reason
@@ -70,8 +71,30 @@ Build in this order:
 1. Reliable email ingestion
 2. SMS sending
 3. Connect email ingestion to SMS delivery
-4. SMS reply handling
-5. Email reply sending on the correct thread
+4. Simple message classification and suggested replies
+5. Simple host reply loop
+6. SMS reply handling
+7. Email reply sending on the correct thread
+
+## Host Memory Structure
+
+Each onboarded host should have:
+
+- `profile.json` for static facts
+- `preferences.json` for tone and behavior
+- `playbooks.json` for situation handling rules
+
+Keep this structure simple and local-first.
+
+## Current Reply Loop
+
+Current MVP behavior:
+
+- `SEND` means use the suggested reply
+- `SKIP` means do nothing
+- any other reply text is treated as the host's edited reply
+
+For now, this reply loop is simulated locally in the terminal after the SMS send. Real inbound SMS handling and real email reply sending are not built yet.
 
 ## Current Relevance Rule
 
