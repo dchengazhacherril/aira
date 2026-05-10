@@ -1,6 +1,7 @@
 from email_reader import get_newest_unread_airbnb_email, parse_airbnb_email
 from host_memory import load_host_memory
 from reply_engine import generate_reply_plan
+from reply_state import save_pending_reply
 from sms import send_sms
 
 
@@ -48,26 +49,14 @@ def build_sms_text(parsed_email, reply_plan):
 
     lines.extend(
         [
-        "Reply With:",
-        "-- send {{ suggested reply }}",
-        "-- edit {{ your custom reply }}",
-        "-- skip",
+            "Reply With:",
+            "-- SEND to send the suggested reply",
+            "-- EDIT followed by your custom reply",
+            "-- SKIP to do nothing",
         ]
     )
 
     return "\n".join(lines)
-
-
-def get_final_reply_text(host_input, reply_plan):
-    normalized_input = host_input.strip()
-
-    if normalized_input.upper() == "SEND":
-        return reply_plan["suggested_reply"]
-
-    if normalized_input.upper() == "SKIP":
-        return ""
-
-    return normalized_input
 
 
 def main():
@@ -123,31 +112,15 @@ def main():
 
         sms_text = build_sms_text(parsed_email, reply_plan)
         message_sid = send_sms(sms_text)
+        save_pending_reply(message, parsed_email, reply_plan, message_sid)
 
         print(f"SMS sent. Message SID: {message_sid}")
         print()
-        print("Simulate host SMS reply in the terminal.")
-        print("Type SEND to use the suggested reply, SKIP to ignore, or type your edited reply.")
-        host_input = input("Host reply: ")
-        final_reply = get_final_reply_text(host_input, reply_plan)
-        print()
-
-        if not final_reply:
-            print("Host chose to skip. No reply will be sent.")
-            return
-
-        if host_input.strip().upper() == "SEND":
-            print("Host chose SEND. Using the suggested reply.")
-        else:
-            print("Host provided an edited reply.")
-
-        print()
-        print("Final reply to send")
-        print("-------------------")
-        print(final_reply)
-        print()
-        print("Reply sending back through Airbnb/email is not built yet.")
-        print("This is a local MVP simulation of the host reply loop.")
+        print("Saved pending reply context for the inbound SMS webhook.")
+        print(
+            "Reply to the text with SEND, SKIP, EDIT followed by your reply, "
+            "or any edited reply text."
+        )
     else:
         print("This does not look like a relevant host-side Airbnb message, so Aira should ignore it.")
 

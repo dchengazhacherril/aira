@@ -1,4 +1,5 @@
 import base64
+import json
 import os.path
 import re
 from html import unescape
@@ -10,17 +11,35 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 
-SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+SCOPES = [
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://www.googleapis.com/auth/gmail.send",
+]
 AIRBNB_SENDER = "express@airbnb.com"
 LOCAL_DIR = ".local"
 CREDENTIALS_PATH = os.path.join(LOCAL_DIR, "credentials.json")
 TOKEN_PATH = os.path.join(LOCAL_DIR, "token.json")
 
 
+def token_file_has_required_scopes():
+    if not os.path.exists(TOKEN_PATH):
+        return False
+
+    with open(TOKEN_PATH) as token_file:
+        token_data = json.load(token_file)
+
+    saved_scopes = token_data.get("scopes") or token_data.get("scope") or []
+
+    if isinstance(saved_scopes, str):
+        saved_scopes = saved_scopes.split()
+
+    return all(scope in saved_scopes for scope in SCOPES)
+
+
 def get_gmail_service():
     creds = None
 
-    if os.path.exists(TOKEN_PATH):
+    if token_file_has_required_scopes():
         creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
 
     if not creds or not creds.valid:
@@ -327,8 +346,13 @@ def get_newest_message_by_query(query):
         headers = message.get("payload", {}).get("headers", [])
 
         return {
+            "id": message.get("id", ""),
+            "thread_id": message.get("threadId", ""),
             "subject": get_header_value(headers, "Subject"),
             "from": get_header_value(headers, "From"),
+            "reply_to": get_header_value(headers, "Reply-To"),
+            "message_id_header": get_header_value(headers, "Message-ID"),
+            "references": get_header_value(headers, "References"),
             "date": get_header_value(headers, "Date"),
             "snippet": clean_text(message.get("snippet", "")),
             "body": find_body_text(message.get("payload", {})),

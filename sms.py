@@ -43,3 +43,27 @@ def send_sms(message_text):
         )
 
     return message.sid
+
+
+def configure_inbound_sms_webhook(webhook_url):
+    account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+    messaging_service_sid = os.getenv("TWILIO_MESSAGING_SERVICE_SID")
+
+    if not account_sid or not auth_token or not messaging_service_sid:
+        raise ValueError(
+            "Missing Twilio Messaging Service settings. Add TWILIO_ACCOUNT_SID, "
+            "TWILIO_AUTH_TOKEN, and TWILIO_MESSAGING_SERVICE_SID to .local/.env."
+        )
+
+    client = Client(account_sid, auth_token)
+    service = client.messaging.v1.services(messaging_service_sid).update(
+        inbound_request_url=webhook_url,
+        inbound_method="POST",
+    )
+
+    return {
+        "messaging_service_sid": service.sid,
+        "inbound_request_url": service.inbound_request_url,
+        "inbound_method": service.inbound_method,
+    }

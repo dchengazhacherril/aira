@@ -85,9 +85,10 @@ The current reply loop is intentionally simple:
 - The host can reply with:
   - `SEND` to use the suggested reply
   - `SKIP` to do nothing
+  - `EDIT <message>` to send a custom edited reply
   - any other text to use that text as an edited reply
 
-For now, the final reply is only simulated locally in the terminal. Sending the reply back through Airbnb email is not built yet.
+When Aira sends the outbound SMS, it saves the pending Gmail thread in `.local/pending_reply.json`. The inbound SMS webhook reads that pending reply context and sends the final reply through Gmail on the same Airbnb thread.
 
 ## Gmail Setup
 
@@ -132,7 +133,7 @@ Examples:
 .venv/bin/python main.py
 ```
 
-The first run will open a browser window for Google OAuth. After you sign in and approve Gmail read-only access, Google will create a local `token.json` file so later runs do not need a new login.
+The first run will open a browser window for Google OAuth. After you sign in and approve Gmail access, Google will create a local `token.json` file so later runs do not need a new login.
 
 ### 4. What the app reads
 
@@ -152,6 +153,43 @@ It prints:
 - Parsed listing name when available
 
 If the message looks relevant to a listing you host or co-host, the app also sends it to your phone with Twilio.
+
+## SMS Reply Webhook
+
+To make real SMS replies work during local development, run the reply server:
+
+```bash
+.venv/bin/python run_reply_server.py
+```
+
+This starts the local SMS webhook, starts a temporary Cloudflare Tunnel, and updates the Twilio Messaging Service inbound webhook automatically. Keep this process running while you test SMS replies.
+
+In a second terminal, run the email check:
+
+```bash
+.venv/bin/python main.py
+```
+
+After `main.py` texts you an Airbnb message, reply to that text with:
+
+- `SEND` to send the suggested reply
+- `SKIP` to clear the pending reply without sending
+- `EDIT Thanks, that works for us.` to send the edited message
+- Or just type the exact edited message you want to send
+
+The lower-level manual webhook command is still available:
+
+```bash
+.venv/bin/python sms_webhook.py
+```
+
+If you use the manual webhook, expose port `8000` yourself and configure the Twilio Messaging Service inbound webhook to:
+
+```text
+https://<your-public-domain>/sms/reply
+```
+
+Use HTTP `POST`.
 
 ## Local Development
 

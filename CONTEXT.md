@@ -93,9 +93,12 @@ Current MVP behavior:
 
 - `SEND` means use the suggested reply
 - `SKIP` means do nothing
-- any other reply text is treated as the host's edited reply
+- `EDIT <message>` means send the custom edited reply
+- any other reply text is also treated as the host's edited reply
 
-For now, this reply loop is simulated locally in the terminal after the SMS send. Real inbound SMS handling and real email reply sending are not built yet.
+Aira saves one pending reply at `.local/pending_reply.json` after sending the outbound SMS. The `sms_webhook.py` process receives Twilio inbound SMS webhooks, resolves the host command, sends through Gmail on the original Airbnb thread, and clears the pending reply when it sends or skips.
+
+For local testing, use `run_reply_server.py`. It starts `sms_webhook.py`, starts a temporary Cloudflare Tunnel, updates the Twilio Messaging Service inbound webhook URL, and streams reply logs.
 
 ## Current Relevance Rule
 
