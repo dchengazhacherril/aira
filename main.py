@@ -5,11 +5,38 @@ from reply_state import save_pending_reply
 from sms import send_sms
 
 
+def make_sms_safe(text):
+    replacements = {
+        "\u2019": "'",
+        "\u2018": "'",
+        "\u201c": '"',
+        "\u201d": '"',
+        "\u2013": "-",
+        "\u2014": "-",
+        "\u2009": " ",
+    }
+
+    for old_value, new_value in replacements.items():
+        text = text.replace(old_value, new_value)
+
+    return " ".join(text.split())
+
+
+def truncate_text(text, max_length):
+    text = make_sms_safe(text)
+
+    if len(text) <= max_length:
+        return text
+
+    return f"{text[: max_length - 3].rstrip()}..."
+
+
 def build_sms_text(parsed_email, reply_plan):
     sender_name = parsed_email["guest_name"]
     sender_role = parsed_email["sender_role"]
     listing_name = parsed_email["listing_name"]
     message_body = parsed_email["guest_message_body"]
+    suggested_reply = reply_plan["suggested_reply"]
     sender_label = sender_name
 
     if sender_role != "unknown":
@@ -19,42 +46,18 @@ def build_sms_text(parsed_email, reply_plan):
         listing_name = "n/a"
 
     lines = [
-        "New Airbnb Message!",
-        f"Sender: {sender_label}",
-        f"Listing: {listing_name}",
+        "Aira Airbnb",
+        f"From: {truncate_text(sender_label, 28)}",
         f"Type: {reply_plan['message_type']}",
-        "Message:",
-        f"\"{message_body}\"",
-        "",
-        "Suggested Reply:",
-        f"\"{reply_plan['suggested_reply']}\"",
-        "",
+        f"Msg: {truncate_text(message_body, 56)}",
     ]
 
     if reply_plan["needs_manual_review"]:
-        lines.extend(
-            [
-                "Confidence: low",
-                "I’m not fully confident here, please review.",
-                "",
-            ]
-        )
+        lines.append("Review needed.")
     else:
-        lines.extend(
-            [
-                "Confidence: high",
-                "",
-            ]
-        )
+        lines.append(f"Reply: {truncate_text(suggested_reply, 58)}")
 
-    lines.extend(
-        [
-            "Reply With:",
-            "-- SEND to send the suggested reply",
-            "-- EDIT followed by your custom reply",
-            "-- SKIP to do nothing",
-        ]
-    )
+    lines.append("Reply SEND/SKIP/EDIT <text>.")
 
     return "\n".join(lines)
 

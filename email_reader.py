@@ -231,12 +231,13 @@ def extract_host_name(clean_body):
 
 def extract_sender_role(clean_body):
     lines = [line for line in clean_body.splitlines() if line.strip()]
+    role_labels = {"booker", "co-host", "cohost", "guest", "host"}
 
     for index, line in enumerate(lines):
         if line.upper() in {"YOU’VE GOT A NEW MESSAGE"} or line.upper().startswith("RESERVATION FOR"):
             for next_line in lines[index + 1:index + 4]:
                 lower_line = next_line.lower()
-                if lower_line in {"co-host", "cohost", "guest", "host"}:
+                if lower_line in role_labels:
                     return clean_text(next_line)
 
     return ""
@@ -246,8 +247,8 @@ def extract_guest_message_body(email_body):
     clean_body = remove_noise_lines(email_body)
 
     patterns = [
-        r"(?s)RESERVATION FOR[^\n]*\n\s*[^\n]+\n\s*(?:Co-host|Cohost|Guest|Host)\s+(.+?)\s*(?:Reply|You can also respond|$)",
-        r"(?s)YOU’VE GOT A NEW MESSAGE\s+[^\n]+\s+(?:Co-host|Cohost|Guest|Host)\s+(.+?)\s*(?:Reply|You can also respond|$)",
+        r"(?s)RESERVATION FOR[^\n]*\n\s*[^\n]+\n\s*(?:Booker|Co-host|Cohost|Guest|Host)\s+(.+?)\s*(?:Reply|You can also respond|$)",
+        r"(?s)YOU’VE GOT A NEW MESSAGE\s+[^\n]+\s+(?:Booker|Co-host|Cohost|Guest|Host)\s+(.+?)\s*(?:Reply|You can also respond|$)",
         r"(?s)^\s*(?:RE:.*?\n+)?[^\n]+\n\s*Hi [^\n,]+,\s*(.+?)\s*(?:Respond to|RESERVATION DETAILS|$)",
         r"(?s)Message from .*?:\s*(.+?)\s*(?:Reply|RESERVATION DETAILS|$)",
         r"(?s)Guest message:\s*(.+?)\s*(?:Reply|RESERVATION DETAILS|$)",
@@ -268,7 +269,7 @@ def extract_guest_message_body(email_body):
             continue
         if lower_line.startswith("reservation for"):
             continue
-        if lower_line in {"host", "guest", "co-host", "cohost"}:
+        if lower_line in {"booker", "host", "guest", "co-host", "cohost"}:
             continue
         if "reservation details" in lower_line or "check-in" in lower_line or "check-out" in lower_line:
             continue
