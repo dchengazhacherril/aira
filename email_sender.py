@@ -60,6 +60,6 @@ def send_reply_email(original_message, reply_text):
         )
 
         return sent_message.get("id", "")
-    except HttpError as error:
+    except (HttpError, RuntimeError) as error:
         print(f"Gmail send error: {error}")
         return ""

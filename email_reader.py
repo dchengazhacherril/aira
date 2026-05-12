@@ -21,21 +21,34 @@ LOCAL_DIR = ".local"
 CREDENTIALS_PATH = os.path.join(LOCAL_DIR, "credentials.json")
 load_dotenv(os.path.join(LOCAL_DIR, ".env"))
 
-GMAIL_ACCOUNT_EMAIL = os.getenv(
+DEFAULT_GMAIL_ACCOUNT_EMAIL = "david@getaira.host"
+DEFAULT_GMAIL_SEND_AS_EMAIL = "aira.cohost@gmail.com"
+
+
+def get_configured_email(name, default):
+    return os.getenv(name, default).strip().lower()
+
+
+def get_token_path(account_email):
+    configured_token_path = os.getenv("GMAIL_TOKEN_PATH")
+    if configured_token_path:
+        return configured_token_path
+
+    token_account = re.sub(r"[^a-zA-Z0-9_.-]+", "_", account_email)
+    return os.path.join(LOCAL_DIR, f"token-{token_account}.json")
+
+
+GMAIL_ACCOUNT_EMAIL = get_configured_email(
     "GMAIL_ACCOUNT_EMAIL",
-    "david@getaira.host",
-).strip().lower()
+    DEFAULT_GMAIL_ACCOUNT_EMAIL,
+)
 
-GMAIL_SEND_AS_EMAIL = os.getenv(
+GMAIL_SEND_AS_EMAIL = get_configured_email(
     "GMAIL_SEND_AS_EMAIL",
-    "aira.cohost@gmail.com",
-).strip()
+    DEFAULT_GMAIL_SEND_AS_EMAIL,
+)
 
-TOKEN_PATH = os.getenv("GMAIL_TOKEN_PATH")
-
-if not TOKEN_PATH:
-    token_account = re.sub(r"[^a-zA-Z0-9_.-]+", "_", GMAIL_ACCOUNT_EMAIL)
-    TOKEN_PATH = os.path.join(LOCAL_DIR, f"token-{token_account}.json")
+TOKEN_PATH = get_token_path(GMAIL_ACCOUNT_EMAIL)
 
 
 def token_file_has_required_scopes():
@@ -75,18 +88,23 @@ def get_gmail_service():
             token_file.write(creds.to_json())
 
     service = build("gmail", "v1", credentials=creds)
+    validate_gmail_account(service)
+    return service
+
+
+def validate_gmail_account(service):
     profile = service.users().getProfile(userId="me").execute()
     authenticated_email = profile.get("emailAddress", "").lower()
 
-    if authenticated_email != GMAIL_ACCOUNT_EMAIL:
-        raise RuntimeError(
-            "Authenticated Gmail account mismatch. "
-            f"Expected {GMAIL_ACCOUNT_EMAIL}, but token is for "
-            f"{authenticated_email or 'unknown account'}. "
-            f"Delete {TOKEN_PATH} and sign in as {GMAIL_ACCOUNT_EMAIL}."
-        )
+    if authenticated_email == GMAIL_ACCOUNT_EMAIL:
+        return
 
-    return service
+    raise RuntimeError(
+        "Authenticated Gmail account mismatch. "
+        f"Expected {GMAIL_ACCOUNT_EMAIL}, but token is for "
+        f"{authenticated_email or 'unknown account'}. "
+        f"Delete {TOKEN_PATH} and sign in as {GMAIL_ACCOUNT_EMAIL}."
+    )
 
 
 def get_header_value(headers, name):
