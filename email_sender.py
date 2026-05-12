@@ -3,7 +3,7 @@ from email.message import EmailMessage
 
 from googleapiclient.errors import HttpError
 
-from email_reader import get_gmail_service
+from email_reader import GMAIL_SEND_AS_EMAIL, get_gmail_service
 
 
 def build_reply_headers(original_message):
@@ -31,6 +31,7 @@ def send_reply_email(original_message, reply_text):
         reply_headers = build_reply_headers(original_message)
 
         email_message = EmailMessage()
+        email_message["From"] = GMAIL_SEND_AS_EMAIL
         email_message["To"] = reply_headers["to"]
         email_message["Subject"] = reply_headers["subject"]
 

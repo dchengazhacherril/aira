@@ -4,6 +4,7 @@ import os.path
 import re
 from html import unescape
 
+from dotenv import load_dotenv
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -18,7 +19,23 @@ SCOPES = [
 AIRBNB_SENDER = "express@airbnb.com"
 LOCAL_DIR = ".local"
 CREDENTIALS_PATH = os.path.join(LOCAL_DIR, "credentials.json")
-TOKEN_PATH = os.path.join(LOCAL_DIR, "token.json")
+load_dotenv(os.path.join(LOCAL_DIR, ".env"))
+
+GMAIL_ACCOUNT_EMAIL = os.getenv(
+    "GMAIL_ACCOUNT_EMAIL",
+    "david@getaira.host",
+).strip().lower()
+
+GMAIL_SEND_AS_EMAIL = os.getenv(
+    "GMAIL_SEND_AS_EMAIL",
+    "aira.cohost@gmail.com",
+).strip()
+
+TOKEN_PATH = os.getenv("GMAIL_TOKEN_PATH")
+
+if not TOKEN_PATH:
+    token_account = re.sub(r"[^a-zA-Z0-9_.-]+", "_", GMAIL_ACCOUNT_EMAIL)
+    TOKEN_PATH = os.path.join(LOCAL_DIR, f"token-{token_account}.json")
 
 
 def token_file_has_required_scopes():
@@ -57,7 +74,19 @@ def get_gmail_service():
         with open(TOKEN_PATH, "w") as token_file:
             token_file.write(creds.to_json())
 
-    return build("gmail", "v1", credentials=creds)
+    service = build("gmail", "v1", credentials=creds)
+    profile = service.users().getProfile(userId="me").execute()
+    authenticated_email = profile.get("emailAddress", "").lower()
+
+    if authenticated_email != GMAIL_ACCOUNT_EMAIL:
+        raise RuntimeError(
+            "Authenticated Gmail account mismatch. "
+            f"Expected {GMAIL_ACCOUNT_EMAIL}, but token is for "
+            f"{authenticated_email or 'unknown account'}. "
+            f"Delete {TOKEN_PATH} and sign in as {GMAIL_ACCOUNT_EMAIL}."
+        )
+
+    return service
 
 
 def get_header_value(headers, name):

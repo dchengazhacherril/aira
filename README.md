@@ -105,6 +105,12 @@ Follow Google's Gmail API Python quickstart for a desktop app:
 - Download the OAuth client file as `credentials.json`
 - Put `credentials.json` in `.local/credentials.json`
 
+The operational Airbnb cohost identity for the MVP is:
+
+`aira.cohost@gmail.com`
+
+Airbnb should send host-side notification emails to that address, and Aira should send all Airbnb email replies from that address. In this local setup, Google may authenticate the mailbox as the upgraded account `david@getaira.host`, while `aira.cohost@gmail.com` remains the working Gmail send-as identity for Airbnb.
+
 ### 2. Install dependencies
 
 It is safest to use a local virtual environment:
@@ -123,9 +129,16 @@ mkdir -p .local
 Examples:
 
 - `.local/credentials.json`
-- `.local/token.json`
+- `.local/token-david_getaira.host.json`
 - `.local/.env`
 - `.local/hosts/`
+
+Set the Gmail account and outbound Airbnb identity in `.local/.env`:
+
+```bash
+GMAIL_ACCOUNT_EMAIL=david@getaira.host
+GMAIL_SEND_AS_EMAIL=aira.cohost@gmail.com
+```
 
 ### 3. Run the app
 
@@ -133,7 +146,9 @@ Examples:
 .venv/bin/python main.py
 ```
 
-The first run will open a browser window for Google OAuth. After you sign in and approve Gmail access, Google will create a local `token.json` file so later runs do not need a new login.
+The first run will open a browser window for Google OAuth. Sign in to the Google account whose canonical email is `david@getaira.host`. Aira will still send Airbnb replies using the configured send-as address `aira.cohost@gmail.com`.
+
+If you previously authenticated a different mailbox, this setup will prompt for a fresh OAuth login because Aira stores the token by Gmail account.
 
 ### 4. What the app reads
 

@@ -34,7 +34,6 @@ def truncate_text(text, max_length):
 def build_sms_text(parsed_email, reply_plan):
     sender_name = parsed_email["guest_name"]
     sender_role = parsed_email["sender_role"]
-    listing_name = parsed_email["listing_name"]
     message_body = parsed_email["guest_message_body"]
     suggested_reply = reply_plan["suggested_reply"]
     sender_label = sender_name
@@ -42,20 +41,21 @@ def build_sms_text(parsed_email, reply_plan):
     if sender_role != "unknown":
         sender_label = f"{sender_name} - {sender_role.title()}"
 
-    if listing_name == "Not found":
-        listing_name = "n/a"
-
     lines = [
         "Aira Airbnb",
-        f"From: {truncate_text(sender_label, 28)}",
-        f"Type: {reply_plan['message_type']}",
-        f"Msg: {truncate_text(message_body, 56)}",
+        f"From: {truncate_text(sender_label, 34)}",
+        f"Msg: {truncate_text(message_body, 72)}",
     ]
 
     if reply_plan["needs_manual_review"]:
         lines.append("Review needed.")
     else:
-        lines.append(f"Reply: {truncate_text(suggested_reply, 58)}")
+        lines.extend(
+            [
+                "Reply:",
+                truncate_text(suggested_reply, 260),
+            ]
+        )
 
     lines.append("Reply SEND/SKIP/EDIT <text>.")
 
