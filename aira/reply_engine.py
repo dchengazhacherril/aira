@@ -5,6 +5,10 @@ def classify_message(message_text):
     text = message_text.lower()
 
     pattern_map = [
+        (
+            "trash",
+            [r"\btrash\b", r"\bgarbage\b", r"\brubbish\b", r"\bbin\b", r"\bbins\b"],
+        ),
         ("parking", [r"\bparking\b", r"\bgarage\b", r"\bpark\b"]),
         ("wifi", [r"\bwifi\b", r"\bwi-fi\b", r"\binternet\b", r"\bpassword\b"]),
         ("check_in", [r"\bcheck in\b", r"\bcheck-in\b", r"\barrival\b", r"\barrive\b"]),

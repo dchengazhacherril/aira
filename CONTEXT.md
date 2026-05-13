@@ -85,6 +85,7 @@ Each onboarded host should have:
 - `playbooks.json` for situation handling rules
 
 Keep this structure simple and local-first.
+Learned facts from edited host replies should be saved back into `profile.json`. Keep `preferences.json` for style and behavior only.
 For now, host profiles are created manually. Do not build automatic host detection or onboarding sync from `automated@airbnb.com`.
 
 ## Current Reply Loop
@@ -99,6 +100,8 @@ Current MVP behavior:
 Aira saves pending replies at `.local/pending_replies.json` after sending outbound SMS messages. Reply IDs are internal only; host-facing SMS messages should not include them. Commands target the newest pending reply.
 
 If a reply needs manual review, `SEND` should not be accepted. The host can reply with the message they want to send, or `SKIP`.
+
+When an edited reply answers a learnable topic, such as trash, Aira should save the answer to `profile.json` and use it for future suggested replies.
 
 The `aira.sms_webhook` module receives Twilio inbound SMS webhooks, resolves the host command, sends through Gmail on the original Airbnb thread, and clears that reply ID when it sends or skips. Local Cloudflare quick-tunnel runs disable Twilio request signature validation because the signed public URL can differ from the forwarded local request. Production should use a stable public URL and re-enable validation.
 

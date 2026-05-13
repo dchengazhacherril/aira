@@ -65,11 +65,11 @@ Each host should have a small structured memory folder so Aira can stay organize
 
 Current structure:
 
-- `.local/hosts/<host_id>/profile.json`: static listing facts like Wi-Fi, check-in time, parking, and listing name
+- `.local/hosts/<host_id>/profile.json`: listing facts like Wi-Fi, check-in time, parking, trash location, and listing name
 - `.local/hosts/<host_id>/preferences.json`: learned host style like tone and sign-off
 - `.local/hosts/<host_id>/playbooks.json`: simple handling rules for common situations like parking, Wi-Fi, check-in, check-out, or lockout
 
-For now, Aira uses this memory to classify messages and generate simple suggested replies.
+For now, Aira uses this memory to classify messages and generate simple suggested replies. When a host edits a reply for a learnable topic, Aira saves that fact back to `profile.json` so future suggestions can use it.
 
 For the MVP, create these host folders manually. Aira does not automatically create or rename host folders.
 
@@ -91,6 +91,8 @@ The current reply loop is intentionally simple:
 When Aira sends the outbound SMS, it saves the pending Gmail thread in `.local/pending_replies.json`. The inbound SMS webhook reads the newest pending reply context and sends the final reply through Gmail on the same Airbnb thread.
 
 If Aira marks a message as needing manual review, `SEND` is blocked. The host can reply with the message they want to send, or `SKIP`.
+
+When the host sends a custom reply for a learnable topic such as trash, Aira stores that answer in the host profile and can suggest it next time.
 
 ## Gmail Setup
 

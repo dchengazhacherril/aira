@@ -1,4 +1,5 @@
 import argparse
+import os
 
 from aira.airbnb_parser import parse_airbnb_email
 from aira.app_logging import log_event
@@ -8,6 +9,14 @@ from aira.reply_engine import generate_reply_plan
 from aira.reply_server import ReplyServer
 from aira.reply_state import build_reply_id, save_pending_reply
 from aira.sms import send_sms
+
+
+TRIAL_SMS_MAX_LENGTH = 120
+
+
+def should_use_trial_safe_sms():
+    value = os.getenv("AIRA_TRIAL_SMS_SAFE", "true").strip().lower()
+    return value not in {"0", "false", "no"}
 
 
 def make_sms_safe(text):
@@ -25,6 +34,15 @@ def make_sms_safe(text):
         text = text.replace(old_value, new_value)
 
     return " ".join(text.split())
+
+
+def fit_sms_text(prefix, text, suffix, max_length):
+    available_length = max_length - len(prefix) - len(suffix)
+
+    if available_length <= 0:
+        return f"{prefix}{suffix}"[:max_length]
+
+    return f"{prefix}{truncate_text(text, available_length)}{suffix}"
 
 
 def truncate_text(text, max_length):
@@ -55,7 +73,33 @@ def format_sender_line(parsed_email):
     return f"{sender_name} ({sender_role})"
 
 
+def build_trial_safe_sms_text(parsed_email, reply_plan):
+    sender_name = truncate_text(parsed_email["guest_name"], 14)
+    sender_line = truncate_text(format_sender_line(parsed_email), 22)
+    message_body = parsed_email["guest_message_body"]
+    suggested_reply = make_sms_safe(reply_plan["suggested_reply"])
+
+    heading = f"{sender_line}: {truncate_text(message_body, 36)}"
+
+    if reply_plan["needs_manual_review"]:
+        prefix = f"{heading}\n"
+        suffix = "\nReply with answer or SKIP."
+        return fit_sms_text(prefix, "", suffix, TRIAL_SMS_MAX_LENGTH)
+
+    prefix = f"{sender_name}\nAns: "
+    suffix = "\nSEND/SKIP/type reply."
+    return fit_sms_text(
+        prefix,
+        suggested_reply,
+        suffix,
+        TRIAL_SMS_MAX_LENGTH,
+    )
+
+
 def build_sms_text(parsed_email, reply_plan):
+    if should_use_trial_safe_sms():
+        return build_trial_safe_sms_text(parsed_email, reply_plan)
+
     message_body = parsed_email["guest_message_body"]
     suggested_reply = reply_plan["suggested_reply"]
 

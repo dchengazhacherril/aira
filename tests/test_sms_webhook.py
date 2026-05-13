@@ -38,6 +38,43 @@ class SmsWebhookTest(unittest.TestCase):
         self.assertEqual(response, "Sent Airbnb reply.")
         self.assertNotIn("gmail-sent-id", response)
 
+    def test_edited_reply_learns_fact_and_mentions_memory(self):
+        pending_reply = {
+            "reply_plan": {
+                "suggested_reply": "Please review.",
+                "needs_manual_review": True,
+                "message_type": "trash",
+            },
+            "parsed_email": {
+                "guest_message_body": "Where should I put the trash?",
+            },
+            "original_message": {
+                "id": "gmail-source",
+                "thread_id": "gmail-thread",
+            },
+        }
+
+        with patch.dict(os.environ, {"MY_PHONE_NUMBER": "+15555555555"}):
+            with patch("aira.sms_webhook.resolve_pending_reply") as resolve_pending:
+                with patch("aira.sms_webhook.send_reply_email", return_value="gmail-sent-id"):
+                    with patch("aira.sms_webhook.clear_pending_reply"):
+                        with patch("aira.sms_webhook.learn_from_edited_reply") as learn:
+                            resolve_pending.return_value = (pending_reply, "ABC123", "")
+                            learn.return_value = {
+                                "message_type": "trash",
+                                "profile_field": "trash_notes",
+                            }
+
+                            response = sms_webhook.handle_inbound_sms(
+                                "+15555555555",
+                                "Put trash in the bins behind the garage.",
+                            )
+
+        self.assertEqual(
+            response,
+            "Sent Airbnb reply. I’ll remember that for next time.",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

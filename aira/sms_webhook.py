@@ -7,6 +7,7 @@ from twilio.request_validator import RequestValidator
 
 from aira.app_logging import log_event as log_json_event
 from aira.email_sender import send_reply_email
+from aira.memory_learning import learn_from_edited_reply
 from aira.reply_flow import parse_host_reply
 from aira.reply_state import clear_pending_reply, resolve_pending_reply
 
@@ -141,6 +142,25 @@ def handle_inbound_sms(from_phone, body_text):
             "Check the webhook terminal logs."
         )
 
+    learned_fact = {}
+    if parsed_reply["action"] == "edit":
+        learned_fact = learn_from_edited_reply(
+            pending_reply,
+            parsed_reply["reply_text"],
+        )
+        if learned_fact:
+            log_message(
+                "Learned host fact "
+                f"message_type={learned_fact['message_type']} "
+                f"profile_field={learned_fact['profile_field']}"
+            )
+            log_json_event(
+                "host_fact_learned",
+                reply_id=reply_id,
+                message_type=learned_fact["message_type"],
+                profile_field=learned_fact["profile_field"],
+            )
+
     clear_pending_reply(reply_id)
     log_message(
         "Gmail reply sent "
@@ -155,6 +175,9 @@ def handle_inbound_sms(from_phone, body_text):
         sent_message_id=sent_reply_id,
         gmail_thread_id=original_message.get("thread_id", ""),
     )
+    if learned_fact:
+        return "Sent Airbnb reply. I’ll remember that for next time."
+
     return "Sent Airbnb reply."
 
 
