@@ -21,6 +21,16 @@ class ReplyFlowTest(unittest.TestCase):
         self.assertEqual(parsed["action"], "error")
         self.assertIn("Review needed", parsed["message"])
 
+    def test_plain_text_sends_as_edit_when_manual_review_needed(self):
+        parsed = parse_host_reply(
+            "Trash goes in the bins behind the garage.",
+            "Please review.",
+            needs_manual_review=True,
+        )
+
+        self.assertEqual(parsed["action"], "edit")
+        self.assertEqual(parsed["reply_text"], "Trash goes in the bins behind the garage.")
+
     def test_edit_with_reply_id_sends_custom_text(self):
         parsed = parse_host_reply(
             "EDIT A1B2C3 Thanks, I will send that now.",

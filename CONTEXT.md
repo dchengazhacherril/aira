@@ -94,11 +94,11 @@ Current MVP behavior:
 - `SEND` means use the suggested reply
 - `SKIP` means do nothing
 - `EDIT <message>` means send the custom edited reply
-- any other reply text is also treated as the host's edited reply for the newest pending message
+- any other reply text is sent as the host's reply for the newest pending message
 
 Aira saves pending replies at `.local/pending_replies.json` after sending outbound SMS messages. Reply IDs are internal only; host-facing SMS messages should not include them. Commands target the newest pending reply.
 
-If a reply needs manual review, `SEND` should not be accepted. The host must send an explicit edit or skip.
+If a reply needs manual review, `SEND` should not be accepted. The host can reply with the message they want to send, or `SKIP`.
 
 The `aira.sms_webhook` module receives Twilio inbound SMS webhooks, resolves the host command, sends through Gmail on the original Airbnb thread, and clears that reply ID when it sends or skips. Local Cloudflare quick-tunnel runs disable Twilio request signature validation because the signed public URL can differ from the forwarded local request. Production should use a stable public URL and re-enable validation.
 

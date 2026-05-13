@@ -86,11 +86,11 @@ The current reply loop is intentionally simple:
   - `SEND` to use the suggested reply
   - `SKIP` to do nothing
   - `EDIT <message>` to send a custom edited reply
-  - any other text to use that text as an edited reply for the newest pending message
+  - any other text to send that text as the reply for the newest pending message
 
 When Aira sends the outbound SMS, it saves the pending Gmail thread in `.local/pending_replies.json`. The inbound SMS webhook reads the newest pending reply context and sends the final reply through Gmail on the same Airbnb thread.
 
-If Aira marks a message as needing manual review, `SEND` is blocked. Use `EDIT <message>` or `SKIP` instead.
+If Aira marks a message as needing manual review, `SEND` is blocked. The host can reply with the message they want to send, or `SKIP`.
 
 ## Gmail Setup
 
@@ -187,7 +187,7 @@ After the email checker texts you an Airbnb message, reply to that text with:
 - `SEND` to send the suggested reply
 - `SKIP` to clear the pending reply without sending
 - `EDIT Thanks, that works for us.` to send the edited message
-- Or just type the exact edited message you want to send for the newest pending message
+- Or just type the exact message you want to send for the newest pending message
 
 The local reply server disables Twilio request signature validation for Cloudflare quick-tunnel testing. A production deployment should turn validation back on with a stable public URL.
 

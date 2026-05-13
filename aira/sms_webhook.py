@@ -155,7 +155,7 @@ def handle_inbound_sms(from_phone, body_text):
         sent_message_id=sent_reply_id,
         gmail_thread_id=original_message.get("thread_id", ""),
     )
-    return f"Sent Airbnb reply. Gmail message id: {sent_reply_id}"
+    return "Sent Airbnb reply."
 
 
 class SmsWebhookHandler(BaseHTTPRequestHandler):

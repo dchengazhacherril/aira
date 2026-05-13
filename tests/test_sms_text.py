@@ -8,6 +8,7 @@ class SmsTextTest(unittest.TestCase):
         parsed_email = {
             "guest_name": "David",
             "sender_role": "co-host",
+            "listing_name": "Not found",
             "guest_message_body": "Where should I put the trash?",
         }
         reply_plan = {
@@ -18,8 +19,32 @@ class SmsTextTest(unittest.TestCase):
         sms_text = build_sms_text(parsed_email, reply_plan)
 
         self.assertNotIn("4C35CD", sms_text)
-        self.assertIn("Aira Airbnb", sms_text)
-        self.assertIn("Reply SEND/SKIP/EDIT <text>.", sms_text)
+        self.assertIn("🏠 Listing: n/a", sms_text)
+        self.assertIn("\n\n💬 David (co-host): Where should I put the trash?", sms_text)
+        self.assertIn("✨ Suggested reply: Please use the bins by the garage.", sms_text)
+        self.assertIn(
+            "\n\nReply SEND/SKIP, or respond with the message you want to send.",
+            sms_text,
+        )
+
+    def test_low_confidence_sms_asks_for_plain_response(self):
+        parsed_email = {
+            "guest_name": "David",
+            "sender_role": "co-host",
+            "listing_name": "Lake House",
+            "guest_message_body": "Where should I put the trash?",
+        }
+        reply_plan = {
+            "suggested_reply": "I'm not fully confident here, please review.",
+            "needs_manual_review": True,
+        }
+
+        sms_text = build_sms_text(parsed_email, reply_plan)
+
+        self.assertIn("🏠 Listing: Lake House", sms_text)
+        self.assertIn("\n\n🤔 I don't know this one yet.", sms_text)
+        self.assertIn("Reply with the message you want to send, or SKIP.", sms_text)
+        self.assertNotIn("EDIT", sms_text)
 
 
 if __name__ == "__main__":

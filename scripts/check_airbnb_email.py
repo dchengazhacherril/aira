@@ -36,38 +36,46 @@ def truncate_text(text, max_length):
     return f"{text[: max_length - 3].rstrip()}..."
 
 
-def build_sms_text(parsed_email, reply_plan):
+def format_listing_name(parsed_email):
+    listing_name = parsed_email.get("listing_name", "")
+
+    if not listing_name or listing_name == "Not found":
+        return "n/a"
+
+    return listing_name
+
+
+def format_sender_line(parsed_email):
     sender_name = parsed_email["guest_name"]
     sender_role = parsed_email["sender_role"]
+
+    if sender_role == "unknown":
+        return sender_name
+
+    return f"{sender_name} ({sender_role})"
+
+
+def build_sms_text(parsed_email, reply_plan):
     message_body = parsed_email["guest_message_body"]
     suggested_reply = reply_plan["suggested_reply"]
-    sender_label = sender_name
 
-    if sender_role != "unknown":
-        sender_label = f"{sender_name} - {sender_role.title()}"
-
-    lines = [
-        "Aira Airbnb",
-        f"From: {truncate_text(sender_label, 34)}",
-        f"Msg: {truncate_text(message_body, 72)}",
+    sections = [
+        f"🏠 Listing: {truncate_text(format_listing_name(parsed_email), 56)}",
+        f"💬 {truncate_text(format_sender_line(parsed_email), 34)}: {truncate_text(message_body, 140)}",
     ]
 
     if reply_plan["needs_manual_review"]:
-        lines.append("Review needed.")
+        sections.append(
+            "🤔 I don't know this one yet.\n"
+            "Reply with the message you want to send, or SKIP."
+        )
     else:
-        lines.extend(
-            [
-                "Reply:",
-                truncate_text(suggested_reply, 260),
-            ]
+        sections.append(f"✨ Suggested reply: {truncate_text(suggested_reply, 260)}")
+        sections.append(
+            "Reply SEND/SKIP, or respond with the message you want to send."
         )
 
-    if reply_plan["needs_manual_review"]:
-        lines.append("Reply EDIT <text> or SKIP.")
-    else:
-        lines.append("Reply SEND/SKIP/EDIT <text>.")
-
-    return "\n".join(lines)
+    return "\n\n".join(sections)
 
 
 def check_airbnb_email_once():
