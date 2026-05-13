@@ -94,11 +94,17 @@ Current MVP behavior:
 - `SEND` means use the suggested reply
 - `SKIP` means do nothing
 - `EDIT <message>` means send the custom edited reply
-- any other reply text is also treated as the host's edited reply
+- any other reply text is also treated as the host's edited reply for the newest pending message
 
-Aira saves one pending reply at `.local/pending_reply.json` after sending the outbound SMS. The `sms_webhook.py` process receives Twilio inbound SMS webhooks, resolves the host command, sends through Gmail on the original Airbnb thread, and clears the pending reply when it sends or skips.
+Aira saves pending replies at `.local/pending_replies.json` after sending outbound SMS messages. Reply IDs are internal only; host-facing SMS messages should not include them. Commands target the newest pending reply.
 
-For local testing, use `run_reply_server.py`. It starts `sms_webhook.py`, starts a temporary Cloudflare Tunnel, updates the Twilio Messaging Service inbound webhook URL, and streams reply logs.
+If a reply needs manual review, `SEND` should not be accepted. The host must send an explicit edit or skip.
+
+The `aira.sms_webhook` module receives Twilio inbound SMS webhooks, resolves the host command, sends through Gmail on the original Airbnb thread, and clears that reply ID when it sends or skips. Local Cloudflare quick-tunnel runs disable Twilio request signature validation because the signed public URL can differ from the forwarded local request. Production should use a stable public URL and re-enable validation.
+
+For normal local testing, use `python -m scripts.check_airbnb_email`. It starts `aira.sms_webhook`, starts a temporary Cloudflare Tunnel, updates the Twilio Messaging Service inbound webhook URL, checks Gmail, sends a host SMS when relevant, and then stays running so the SMS reply can be received and logged.
+
+Use `python -m scripts.run_reply_server` only when you want the lower-level inbound reply server by itself.
 
 ## Current Relevance Rule
 

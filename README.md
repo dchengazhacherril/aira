@@ -86,9 +86,11 @@ The current reply loop is intentionally simple:
   - `SEND` to use the suggested reply
   - `SKIP` to do nothing
   - `EDIT <message>` to send a custom edited reply
-  - any other text to use that text as an edited reply
+  - any other text to use that text as an edited reply for the newest pending message
 
-When Aira sends the outbound SMS, it saves the pending Gmail thread in `.local/pending_reply.json`. The inbound SMS webhook reads that pending reply context and sends the final reply through Gmail on the same Airbnb thread.
+When Aira sends the outbound SMS, it saves the pending Gmail thread in `.local/pending_replies.json`. The inbound SMS webhook reads the newest pending reply context and sends the final reply through Gmail on the same Airbnb thread.
+
+If Aira marks a message as needing manual review, `SEND` is blocked. Use `EDIT <message>` or `SKIP` instead.
 
 ## Gmail Setup
 
@@ -138,13 +140,16 @@ Set the Gmail account and outbound Airbnb identity in `.local/.env`:
 ```bash
 GMAIL_ACCOUNT_EMAIL=david@getaira.host
 GMAIL_SEND_AS_EMAIL=aira.cohost@gmail.com
+TWILIO_VALIDATE_REQUESTS=true
 ```
 
 ### 3. Run the app
 
 ```bash
-.venv/bin/python main.py
+.venv/bin/python -m scripts.check_airbnb_email
 ```
+
+This starts the inbound SMS reply server, opens a temporary Cloudflare Tunnel, updates the Twilio inbound webhook, checks Gmail for the newest unread Airbnb message, sends a text if the message is relevant, and then stays running so your SMS reply can be logged and sent back through Gmail.
 
 The first run will open a browser window for Google OAuth. Sign in to the Google account whose canonical email is `david@getaira.host`. Aira will still send Airbnb replies using the configured send-as address `aira.cohost@gmail.com`.
 
@@ -171,31 +176,29 @@ If the message looks relevant to a listing you host or co-host, the app also sen
 
 ## SMS Reply Webhook
 
-To make real SMS replies work during local development, run the reply server:
+The normal email-check command now runs the full local reply flow:
 
 ```bash
-.venv/bin/python run_reply_server.py
+.venv/bin/python -m scripts.check_airbnb_email
 ```
 
-This starts the local SMS webhook, starts a temporary Cloudflare Tunnel, and updates the Twilio Messaging Service inbound webhook automatically. Keep this process running while you test SMS replies.
-
-In a second terminal, run the email check:
-
-```bash
-.venv/bin/python main.py
-```
-
-After `main.py` texts you an Airbnb message, reply to that text with:
+After the email checker texts you an Airbnb message, reply to that text with:
 
 - `SEND` to send the suggested reply
 - `SKIP` to clear the pending reply without sending
 - `EDIT Thanks, that works for us.` to send the edited message
-- Or just type the exact edited message you want to send
+- Or just type the exact edited message you want to send for the newest pending message
 
-The lower-level manual webhook command is still available:
+The local reply server disables Twilio request signature validation for Cloudflare quick-tunnel testing. A production deployment should turn validation back on with a stable public URL.
+
+Lower-level manual commands are still available:
 
 ```bash
-.venv/bin/python sms_webhook.py
+.venv/bin/python -m scripts.run_reply_server
+```
+
+```bash
+.venv/bin/python -m aira.sms_webhook
 ```
 
 If you use the manual webhook, expose port `8000` yourself and configure the Twilio Messaging Service inbound webhook to:
@@ -209,5 +212,12 @@ Use HTTP `POST`.
 ## Local Development
 
 This repo is currently a local prototype focused on validating the workflow, not productionizing infrastructure.
+
+Project layout:
+
+- `aira/`: application modules for Gmail, Airbnb parsing, Twilio SMS, reply state, and reply generation
+- `scripts/`: runnable local commands
+- `tests/`: unit tests for parser, reply flow, reply state, and webhook behavior
+- `.local/`: ignored local secrets, Gmail tokens, host memory, and pending reply state
 
 A simple landing page and waitlist may be built separately, but that is not the focus of this codebase.

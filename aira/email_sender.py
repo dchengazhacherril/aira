@@ -3,7 +3,7 @@ from email.message import EmailMessage
 
 from googleapiclient.errors import HttpError
 
-from email_reader import GMAIL_SEND_AS_EMAIL, get_gmail_service
+from aira.email_reader import GMAIL_SEND_AS_EMAIL, get_gmail_service
 
 
 def build_reply_headers(original_message):

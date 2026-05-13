@@ -1,4 +1,21 @@
-def parse_host_reply(host_reply_text, suggested_reply):
+def remove_reply_id(host_reply_text, reply_id):
+    if not reply_id:
+        return host_reply_text
+
+    words = host_reply_text.strip().split()
+    filtered_words = [
+        word for word in words if word.strip(".,:;()[]{}").upper() != reply_id.upper()
+    ]
+    return " ".join(filtered_words)
+
+
+def parse_host_reply(
+    host_reply_text,
+    suggested_reply,
+    needs_manual_review=False,
+    reply_id="",
+):
+    host_reply_text = remove_reply_id(host_reply_text, reply_id)
     normalized_reply = host_reply_text.strip()
     command = normalized_reply.lower()
 
@@ -10,6 +27,13 @@ def parse_host_reply(host_reply_text, suggested_reply):
         }
 
     if command == "send":
+        if needs_manual_review:
+            return {
+                "action": "error",
+                "reply_text": "",
+                "message": "Review needed. Reply with EDIT followed by the exact message to send, or SKIP.",
+            }
+
         return {
             "action": "send",
             "reply_text": suggested_reply,
