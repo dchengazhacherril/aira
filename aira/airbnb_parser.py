@@ -71,6 +71,15 @@ def extract_message_sender(clean_body, subject):
     if subject_name:
         return subject_name
 
+    inquiry_name = find_first_match(
+        clean_body,
+        [
+            r"RESPOND TO\s+(.+?)[’']S INQUIRY",
+        ],
+    )
+    if inquiry_name:
+        return inquiry_name.title()
+
     lines = [line for line in clean_body.splitlines() if line.strip()]
     if not lines:
         return ""
@@ -82,6 +91,12 @@ def extract_message_sender(clean_body, subject):
                 return clean_text(possible_name)
 
         if line.upper().startswith("RESERVATION FOR"):
+            if index + 1 < len(lines):
+                possible_name = lines[index + 1]
+                if len(possible_name) < 60:
+                    return clean_text(possible_name)
+
+        if line.lower().startswith("inquiry for "):
             if index + 1 < len(lines):
                 possible_name = lines[index + 1]
                 if len(possible_name) < 60:
@@ -103,6 +118,7 @@ def extract_listing_name(clean_body, subject):
     listing_name = find_first_match(
         subject,
         [
+            r"Inquiry for (.+?) for [A-Z][a-z]{2,9} \d{1,2}",
             r"Reservation at (.+?) for [A-Z][a-z]{2,9} \d{1,2}",
         ],
     )
@@ -134,6 +150,9 @@ def extract_sender_role(clean_body):
     lines = [line for line in clean_body.splitlines() if line.strip()]
     role_labels = {"booker", "co-host", "cohost", "guest", "host"}
 
+    if re.search(r"RESPOND TO\s+.+?[’']S INQUIRY", clean_body, re.IGNORECASE):
+        return "guest"
+
     for index, line in enumerate(lines):
         if line.upper() in {"YOU’VE GOT A NEW MESSAGE"} or line.upper().startswith("RESERVATION FOR"):
             for next_line in lines[index + 1:index + 4]:
@@ -144,10 +163,22 @@ def extract_sender_role(clean_body):
     return ""
 
 
+def is_reservation_reminder(subject, clean_body):
+    if subject.lower().startswith("reservation reminder:"):
+        return True
+
+    return bool(
+        re.search(r"^[A-Z][A-Z\s]+ ARRIVES .+", clean_body)
+        and "if you haven’t already, reach out" in clean_body.lower()
+    )
+
+
 def extract_guest_message_body(email_body):
     clean_body = remove_noise_lines(email_body)
 
     patterns = [
+        r"(?s)RESPOND TO .+?[’']S INQUIRY\s+[^\n]+\s+(?:Identity verified[^\n]*\n\s*)?(?:[^\n]*,\s*[A-Z]{2}\n\s*)?(.+?)\s*(?:Pre-approve|Decline|YOU HAVE 24|FREQUENTLY ASKED|CUSTOMER SUPPORT|Airbnb, Inc\.|$)",
+        r"(?s)Inquiry for[^\n]*\n\s*[^\n]+\n\s*(?:Booker|Co-host|Cohost|Guest|Host)\s+(.+?)\s*(?:Reply|You can also respond|RESERVATION DETAILS|Home -|$)",
         r"(?s)RESERVATION FOR[^\n]*\n\s*[^\n]+\n\s*(?:Booker|Co-host|Cohost|Guest|Host)\s+(.+?)\s*(?:Reply|You can also respond|RESERVATION DETAILS|$)",
         r"(?s)YOU’VE GOT A NEW MESSAGE\s+[^\n]+\s+(?:Booker|Co-host|Cohost|Guest|Host)\s+(.+?)\s*(?:Reply|You can also respond|RESERVATION DETAILS|$)",
         r"(?s)^\s*(?:RE:.*?\n+)?[^\n]+\n\s*Hi [^\n,]+,\s*(.+?)\s*(?:Respond to|RESERVATION DETAILS|$)",
@@ -169,6 +200,8 @@ def extract_guest_message_body(email_body):
         if lower_line.startswith("re:"):
             continue
         if lower_line.startswith("reservation for"):
+            continue
+        if lower_line.startswith("inquiry for"):
             continue
         if lower_line in {"booker", "host", "guest", "co-host", "cohost"}:
             continue
@@ -193,6 +226,7 @@ def parse_airbnb_email(email_body, subject=""):
     guest_message_body = extract_guest_message_body(email_body)
     sender_role = "unknown"
     is_relevant_message = False
+    is_reminder = is_reservation_reminder(subject, clean_body)
 
     if extracted_sender_role:
         sender_role = extracted_sender_role.lower()
@@ -208,6 +242,12 @@ def parse_airbnb_email(email_body, subject=""):
 
     if "inbox_type=host" in email_body or "/hosting/thread/" in email_body:
         is_relevant_message = True
+
+    if subject.lower().startswith("inquiry for "):
+        is_relevant_message = True
+
+    if is_reminder:
+        is_relevant_message = False
 
     if sender_role == "host":
         is_relevant_message = False

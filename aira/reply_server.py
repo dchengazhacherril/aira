@@ -8,6 +8,7 @@ import time
 
 from dotenv import load_dotenv
 
+from aira.reply_state import load_pending_reply
 from aira.sms import configure_inbound_sms_webhook
 
 
@@ -112,15 +113,37 @@ class ReplyServer:
 
         print("Reply server is ready.", flush=True)
 
+    def ensure_running(self):
+        if self.webhook_process.poll() is not None:
+            raise RuntimeError("SMS webhook process exited.")
+
+        if self.tunnel_process.poll() is not None:
+            raise RuntimeError("cloudflared process exited.")
+
     def monitor(self):
         while True:
-            if self.webhook_process.poll() is not None:
-                raise RuntimeError("SMS webhook process exited.")
-
-            if self.tunnel_process.poll() is not None:
-                raise RuntimeError("cloudflared process exited.")
-
+            self.ensure_running()
             time.sleep(0.2)
+
+    def monitor_pending_reply(self, reply_id, timeout_seconds):
+        started_at = time.time()
+
+        while True:
+            self.ensure_running()
+
+            if not load_pending_reply(reply_id):
+                print("Pending reply resolved. Stopping local reply server.", flush=True)
+                return True
+
+            if time.time() - started_at >= timeout_seconds:
+                print(
+                    "Timed out waiting for SMS reply. "
+                    "Pending reply is still saved for the next run.",
+                    flush=True,
+                )
+                return False
+
+            time.sleep(0.5)
 
     def stop(self):
         stop_process(self.tunnel_process)

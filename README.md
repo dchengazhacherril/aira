@@ -151,7 +151,13 @@ TWILIO_VALIDATE_REQUESTS=true
 .venv/bin/python -m scripts.check_airbnb_email
 ```
 
-This starts the inbound SMS reply server, opens a temporary Cloudflare Tunnel, updates the Twilio inbound webhook, checks Gmail for the newest unread Airbnb message, sends a text if the message is relevant, and then stays running so your SMS reply can be logged and sent back through Gmail.
+This starts the inbound SMS reply server, opens a temporary Cloudflare Tunnel, updates the Twilio inbound webhook, checks Gmail for the newest unread Airbnb message, sends a text if the message is relevant, and then waits for your SMS reply. After the pending reply is sent, skipped, or the local wait times out, the script stops the local webhook and tunnel processes.
+
+The default local wait is 15 minutes. To change it:
+
+```bash
+.venv/bin/python -m scripts.check_airbnb_email --reply-timeout-seconds 600
+```
 
 The first run will open a browser window for Google OAuth. Sign in to the Google account whose canonical email is `david@getaira.host`. Aira will still send Airbnb replies using the configured send-as address `aira.cohost@gmail.com`.
 
@@ -162,6 +168,8 @@ If you previously authenticated a different mailbox, this setup will prompt for 
 The app currently looks for the newest unread inbox email from:
 
 `express@airbnb.com`
+
+Emails from `automated@airbnb.com` are ignored by the active reply loop because Airbnb does not accept normal email replies for those notifications.
 
 It prints:
 
@@ -183,6 +191,8 @@ The normal email-check command now runs the full local reply flow:
 ```bash
 .venv/bin/python -m scripts.check_airbnb_email
 ```
+
+This local runner exits automatically after your reply is handled, or after the configured timeout. Use the lower-level reply server command only when you intentionally want the webhook and tunnel to keep running.
 
 After the email checker texts you an Airbnb message, reply to that text with:
 

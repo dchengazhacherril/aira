@@ -86,7 +86,7 @@ Each onboarded host should have:
 
 Keep this structure simple and local-first.
 Learned facts from edited host replies should be saved back into `profile.json`. Keep `preferences.json` for style and behavior only.
-For now, host profiles are created manually. Do not build automatic host detection or onboarding sync from `automated@airbnb.com`.
+For now, host profiles are created manually. Do not build automatic host detection or onboarding sync from Airbnb account metadata.
 
 ## Current Reply Loop
 
@@ -105,7 +105,7 @@ When an edited reply answers a learnable topic, such as trash, Aira should save 
 
 The `aira.sms_webhook` module receives Twilio inbound SMS webhooks, resolves the host command, sends through Gmail on the original Airbnb thread, and clears that reply ID when it sends or skips. Local Cloudflare quick-tunnel runs disable Twilio request signature validation because the signed public URL can differ from the forwarded local request. Production should use a stable public URL and re-enable validation.
 
-For normal local testing, use `python -m scripts.check_airbnb_email`. It starts `aira.sms_webhook`, starts a temporary Cloudflare Tunnel, updates the Twilio Messaging Service inbound webhook URL, checks Gmail, sends a host SMS when relevant, and then stays running so the SMS reply can be received and logged.
+For normal local testing, use `python -m scripts.check_airbnb_email`. It starts `aira.sms_webhook`, starts a temporary Cloudflare Tunnel, updates the Twilio Messaging Service inbound webhook URL, checks Gmail, sends a host SMS when relevant, and then waits for the pending SMS reply to be sent or skipped. After that reply is resolved, or after the local timeout, it stops the webhook and tunnel processes automatically.
 
 Use `python -m scripts.run_reply_server` only when you want the lower-level inbound reply server by itself.
 

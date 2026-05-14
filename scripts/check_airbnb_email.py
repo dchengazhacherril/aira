@@ -12,6 +12,7 @@ from aira.sms import send_sms
 
 
 TRIAL_SMS_MAX_LENGTH = 120
+DEFAULT_REPLY_TIMEOUT_SECONDS = 15 * 60
 
 
 def should_use_trial_safe_sms():
@@ -75,16 +76,13 @@ def format_sender_line(parsed_email):
 
 def build_trial_safe_sms_text(parsed_email, reply_plan):
     sender_name = truncate_text(parsed_email["guest_name"], 14)
-    sender_line = truncate_text(format_sender_line(parsed_email), 22)
     message_body = parsed_email["guest_message_body"]
     suggested_reply = make_sms_safe(reply_plan["suggested_reply"])
 
-    heading = f"{sender_line}: {truncate_text(message_body, 36)}"
-
     if reply_plan["needs_manual_review"]:
-        prefix = f"{heading}\n"
-        suffix = "\nReply with answer or SKIP."
-        return fit_sms_text(prefix, "", suffix, TRIAL_SMS_MAX_LENGTH)
+        prefix = f"{sender_name}: "
+        suffix = "\nReply answer/SKIP."
+        return fit_sms_text(prefix, message_body, suffix, TRIAL_SMS_MAX_LENGTH)
 
     prefix = f"{sender_name}\nAns: "
     suffix = "\nSEND/SKIP/type reply."
@@ -196,7 +194,7 @@ def check_airbnb_email_once():
             sms_message_sid=message_sid,
             needs_manual_review=reply_plan["needs_manual_review"],
         )
-        return True
+        return reply_id
     else:
         print("This does not look like a relevant host-side Airbnb message, so Aira should ignore it.")
         mark_message_read(message["id"])
@@ -206,7 +204,7 @@ def check_airbnb_email_once():
             gmail_thread_id=message["thread_id"],
             sender_role=parsed_email["sender_role"],
         )
-        return False
+        return ""
 
 
 def main():
@@ -218,6 +216,12 @@ def main():
         action="store_true",
         help="Only check/send outbound SMS; do not start the inbound reply server.",
     )
+    parser.add_argument(
+        "--reply-timeout-seconds",
+        type=int,
+        default=DEFAULT_REPLY_TIMEOUT_SECONDS,
+        help="How long the local runner should wait for your SMS reply before stopping.",
+    )
     args = parser.parse_args()
 
     reply_server = None
@@ -228,12 +232,19 @@ def main():
             reply_server.start()
             print()
 
-        sms_sent = check_airbnb_email_once()
+        reply_id = check_airbnb_email_once()
 
-        if reply_server and sms_sent:
+        if reply_server and reply_id:
             print()
-            print("Waiting for your SMS reply. Press Ctrl-C to stop.", flush=True)
-            reply_server.monitor()
+            print(
+                "Waiting for your SMS reply. "
+                f"Will stop automatically after {args.reply_timeout_seconds} seconds.",
+                flush=True,
+            )
+            reply_server.monitor_pending_reply(
+                reply_id,
+                timeout_seconds=args.reply_timeout_seconds,
+            )
     except KeyboardInterrupt:
         print("Stopping Aira reply flow...", flush=True)
     finally:

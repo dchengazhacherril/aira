@@ -61,8 +61,31 @@ class SmsTextTest(unittest.TestCase):
         sms_text = build_sms_text(parsed_email, reply_plan)
 
         self.assertLessEqual(len(sms_text), 120)
-        self.assertIn("David (co-host): Where should I put the trash?", sms_text)
-        self.assertIn("Reply with answer or SKIP.", sms_text)
+        self.assertIn("David: Where should I put the trash?", sms_text)
+        self.assertIn("Reply answer/SKIP.", sms_text)
+        self.assertNotIn("EDIT", sms_text)
+
+    def test_low_confidence_sms_keeps_more_guest_message_context(self):
+        parsed_email = {
+            "guest_name": "Nathan",
+            "sender_role": "guest",
+            "listing_name": "2BR King Bed | BeltLine, MLK Park, Mercedes-Benz",
+            "guest_message_body": (
+                "Hi! Does there happen to be a grill out back? "
+                "And walkable coffee shop? Thanks !"
+            ),
+        }
+        reply_plan = {
+            "suggested_reply": "I'm not fully confident here, please review.",
+            "needs_manual_review": True,
+        }
+
+        sms_text = build_sms_text(parsed_email, reply_plan)
+
+        self.assertLessEqual(len(sms_text), 120)
+        self.assertIn("Nathan: Hi! Does there happen to be a grill out back?", sms_text)
+        self.assertIn("And walkable coffee shop? Thanks !", sms_text)
+        self.assertIn("Reply answer/SKIP.", sms_text)
         self.assertNotIn("EDIT", sms_text)
 
     def test_rich_sms_text_can_be_enabled_after_twilio_trial(self):
