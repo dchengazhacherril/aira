@@ -221,12 +221,16 @@ class SmsWebhookHandler(BaseHTTPRequestHandler):
         self.wfile.write(response_body)
 
 
+def get_listen_port():
+    return int(os.getenv("PORT", os.getenv("SMS_WEBHOOK_PORT", "8000")))
+
+
 def main():
-    port = int(os.getenv("SMS_WEBHOOK_PORT", "8000"))
+    port = get_listen_port()
     server = HTTPServer(("0.0.0.0", port), SmsWebhookHandler)
 
     log_message(f"Aira SMS webhook listening on http://localhost:{port}")
-    log_message("Configure Twilio incoming messages to POST to your public tunnel URL.")
+    log_message("Configure Twilio incoming messages to POST to this service URL.")
     server.serve_forever()
 
 

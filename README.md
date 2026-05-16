@@ -232,4 +232,14 @@ Project layout:
 - `tests/`: unit tests for parser, reply flow, reply state, and webhook behavior
 - `.local/`: ignored local secrets, Gmail tokens, host memory, and pending reply state
 
+## Railway Deployment
+
+For an always-on MVP, deploy Aira as:
+
+- A Railway web service running `python -m aira.sms_webhook`
+- A Railway cron service running `python -m scripts.check_airbnb_email --no-reply-server`
+- A Railway Postgres database shared by both services
+
+See `RAILWAY_DEPLOY.md` for the step-by-step setup and required environment variables.
+
 A simple landing page and waitlist may be built separately, but that is not the focus of this codebase.

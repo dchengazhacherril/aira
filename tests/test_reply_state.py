@@ -13,6 +13,7 @@ class ReplyStateTest(unittest.TestCase):
         self.pending_path = os.path.join(self.temp_dir.name, "pending_replies.json")
         self.legacy_path = os.path.join(self.temp_dir.name, "pending_reply.json")
         self.patches = [
+            patch.dict(os.environ, {"DATABASE_URL": ""}),
             patch.object(reply_state, "LOCAL_DIR", self.temp_dir.name),
             patch.object(reply_state, "PENDING_REPLIES_PATH", self.pending_path),
             patch.object(reply_state, "LEGACY_PENDING_REPLY_PATH", self.legacy_path),
@@ -54,6 +55,10 @@ class ReplyStateTest(unittest.TestCase):
         self.assertEqual(error, "")
         self.assertEqual(resolved_reply_id, reply_id)
         self.assertEqual(pending_reply["sms_message_sid"], "sms-1")
+
+    def test_database_storage_is_enabled_by_database_url(self):
+        with patch.dict(os.environ, {"DATABASE_URL": "postgresql://example"}):
+            self.assertTrue(reply_state.should_use_database_storage())
 
 
 if __name__ == "__main__":

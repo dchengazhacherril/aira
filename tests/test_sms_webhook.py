@@ -15,6 +15,13 @@ class SmsWebhookTest(unittest.TestCase):
 
         self.assertIn("A &amp; B &lt; C", response)
 
+    def test_listen_port_prefers_platform_port(self):
+        with patch.dict(
+            os.environ,
+            {"PORT": "12345", "SMS_WEBHOOK_PORT": "8000"},
+        ):
+            self.assertEqual(sms_webhook.get_listen_port(), 12345)
+
     def test_success_confirmation_hides_gmail_message_id(self):
         pending_reply = {
             "reply_plan": {

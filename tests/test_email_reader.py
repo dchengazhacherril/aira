@@ -1,4 +1,6 @@
 import unittest
+import json
+import os
 from unittest.mock import patch
 
 from aira import email_reader
@@ -15,6 +17,20 @@ class EmailReaderTest(unittest.TestCase):
         self.assertIn("from:express@airbnb.com", query)
         self.assertNotIn("from:automated@airbnb.com", query)
         self.assertIn("is:unread", query)
+
+    def test_token_json_env_can_replace_local_token_file(self):
+        token_data = {
+            "token": "access-token",
+            "refresh_token": "refresh-token",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "client_id": "client-id",
+            "client_secret": "client-secret",
+            "scopes": email_reader.SCOPES,
+        }
+
+        with patch.dict(os.environ, {"GMAIL_TOKEN_JSON": json.dumps(token_data)}):
+            with patch("aira.email_reader.os.path.exists", return_value=False):
+                self.assertTrue(email_reader.token_file_has_required_scopes())
 
 
 if __name__ == "__main__":

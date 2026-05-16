@@ -39,6 +39,14 @@ def get_token_path(account_email):
     return os.path.join(LOCAL_DIR, f"token-{token_account}.json")
 
 
+def load_json_env(name):
+    value = os.getenv(name, "").strip()
+    if not value:
+        return None
+
+    return json.loads(value)
+
+
 GMAIL_ACCOUNT_EMAIL = get_configured_email(
     "GMAIL_ACCOUNT_EMAIL",
     DEFAULT_GMAIL_ACCOUNT_EMAIL,
@@ -52,13 +60,7 @@ GMAIL_SEND_AS_EMAIL = get_configured_email(
 TOKEN_PATH = get_token_path(GMAIL_ACCOUNT_EMAIL)
 
 
-def token_file_has_required_scopes():
-    if not os.path.exists(TOKEN_PATH):
-        return False
-
-    with open(TOKEN_PATH) as token_file:
-        token_data = json.load(token_file)
-
+def token_has_required_scopes(token_data):
     saved_scopes = token_data.get("scopes") or token_data.get("scope") or []
 
     if isinstance(saved_scopes, str):
@@ -67,26 +69,60 @@ def token_file_has_required_scopes():
     return all(scope in saved_scopes for scope in SCOPES)
 
 
+def load_token_data():
+    env_token_data = load_json_env("GMAIL_TOKEN_JSON")
+    if env_token_data:
+        return env_token_data
+
+    if not os.path.exists(TOKEN_PATH):
+        return None
+
+    with open(TOKEN_PATH) as token_file:
+        return json.load(token_file)
+
+
+def token_file_has_required_scopes():
+    token_data = load_token_data()
+    if not token_data:
+        return False
+
+    return token_has_required_scopes(token_data)
+
+
+def build_installed_app_flow():
+    credentials_data = load_json_env("GMAIL_CREDENTIALS_JSON")
+    if credentials_data:
+        return InstalledAppFlow.from_client_config(credentials_data, SCOPES)
+
+    return InstalledAppFlow.from_client_secrets_file(
+        CREDENTIALS_PATH,
+        SCOPES,
+    )
+
+
+def can_write_gmail_token_file():
+    return not load_json_env("GMAIL_TOKEN_JSON")
+
+
 def get_gmail_service():
     creds = None
+    token_data = load_token_data()
 
-    if token_file_has_required_scopes():
-        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+    if token_data and token_has_required_scopes(token_data):
+        creds = Credentials.from_authorized_user_info(token_data, SCOPES)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                CREDENTIALS_PATH,
-                SCOPES,
-            )
+            flow = build_installed_app_flow()
             creds = flow.run_local_server(port=0)
 
-        os.makedirs(LOCAL_DIR, exist_ok=True)
+        if can_write_gmail_token_file():
+            os.makedirs(LOCAL_DIR, exist_ok=True)
 
-        with open(TOKEN_PATH, "w") as token_file:
-            token_file.write(creds.to_json())
+            with open(TOKEN_PATH, "w") as token_file:
+                token_file.write(creds.to_json())
 
     service = build("gmail", "v1", credentials=creds)
     validate_gmail_account(service)
