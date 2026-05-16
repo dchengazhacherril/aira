@@ -32,7 +32,15 @@ Railway will provide `DATABASE_URL` from the Postgres service.
 
 ## 3. Webhook Service
 
-Use this start command:
+The repo uses this Railway start command for every service:
+
+```bash
+python -m scripts.railway_entrypoint
+```
+
+The entrypoint starts the webhook by default.
+
+Manual equivalent:
 
 ```bash
 python -m aira.sms_webhook
@@ -65,7 +73,21 @@ Railway sets `PORT` automatically. The webhook listens on that port.
 
 ## 4. Checker Cron Service
 
-Use this command:
+The repo uses this Railway start command for every service:
+
+```bash
+python -m scripts.railway_entrypoint
+```
+
+The entrypoint detects `aira-checker` by service name and runs the checker once.
+
+If your checker service has a different name, set this variable:
+
+```bash
+AIRA_RAILWAY_ROLE=checker
+```
+
+Manual equivalent:
 
 ```bash
 python -m scripts.check_airbnb_email --no-reply-server

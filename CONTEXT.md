@@ -109,7 +109,7 @@ For normal local testing, use `python -m scripts.check_airbnb_email`. It starts 
 
 Use `python -m scripts.run_reply_server` only when you want the lower-level inbound reply server by itself.
 
-For Railway, run `python -m aira.sms_webhook` as the web service and `python -m scripts.check_airbnb_email --no-reply-server` as the cron checker. Set `DATABASE_URL` so pending replies and host memory are shared by both processes. Set `GMAIL_TOKEN_JSON` so the deployed services do not depend on local OAuth token files.
+For Railway, run `python -m scripts.railway_entrypoint` for both services. The entrypoint starts the webhook by default and runs the checker once when the Railway service name contains `checker` or `AIRA_RAILWAY_ROLE=checker` is set. Set `DATABASE_URL` so pending replies and host memory are shared by both processes. Set `GMAIL_TOKEN_JSON` so the deployed services do not depend on local OAuth token files.
 
 ## Current Relevance Rule
 

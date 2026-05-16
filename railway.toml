@@ -1,2 +1,2 @@
 [deploy]
-startCommand = "python -m aira.sms_webhook"
+startCommand = "python -m scripts.railway_entrypoint"

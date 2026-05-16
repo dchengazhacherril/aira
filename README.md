@@ -236,8 +236,8 @@ Project layout:
 
 For an always-on MVP, deploy Aira as:
 
-- A Railway web service running `python -m aira.sms_webhook`
-- A Railway cron service running `python -m scripts.check_airbnb_email --no-reply-server`
+- A Railway web service running `python -m scripts.railway_entrypoint`
+- A Railway cron service running `python -m scripts.railway_entrypoint`
 - A Railway Postgres database shared by both services
 
 See `RAILWAY_DEPLOY.md` for the step-by-step setup and required environment variables.
