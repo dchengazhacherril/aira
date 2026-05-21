@@ -11,7 +11,7 @@ from aira.reply_state import build_reply_id, save_pending_reply
 from aira.sms import send_sms
 
 
-TRIAL_SMS_MAX_LENGTH = 120
+TRIAL_SMS_MAX_LENGTH = 320
 DEFAULT_REPLY_TIMEOUT_SECONDS = 15 * 60
 
 
@@ -74,29 +74,27 @@ def format_sender_line(parsed_email):
     return f"{sender_name} ({sender_role})"
 
 
-def build_trial_safe_sms_text(parsed_email, reply_plan):
+def build_trial_safe_sms_text(parsed_email, reply_plan, reply_id=""):
     sender_name = truncate_text(parsed_email["guest_name"], 14)
     message_body = parsed_email["guest_message_body"]
     suggested_reply = make_sms_safe(reply_plan["suggested_reply"])
 
     if reply_plan["needs_manual_review"]:
-        prefix = f"{sender_name}: "
-        suffix = "\nReply answer/SKIP."
+        prefix = f"- {sender_name}: "
+        suffix = "\nReply msg/SKIP."
         return fit_sms_text(prefix, message_body, suffix, TRIAL_SMS_MAX_LENGTH)
 
-    prefix = f"{sender_name}\nAns: "
-    suffix = "\nSEND/SKIP/type reply."
-    return fit_sms_text(
-        prefix,
-        suggested_reply,
-        suffix,
-        TRIAL_SMS_MAX_LENGTH,
+    prefix = f"- {sender_name}: "
+    suffix = (
+        f"\nAns: {suggested_reply}"
+        "\nSEND/SKIP/type reply."
     )
+    return fit_sms_text(prefix, message_body, suffix, TRIAL_SMS_MAX_LENGTH)
 
 
-def build_sms_text(parsed_email, reply_plan):
+def build_sms_text(parsed_email, reply_plan, reply_id=""):
     if should_use_trial_safe_sms():
-        return build_trial_safe_sms_text(parsed_email, reply_plan)
+        return build_trial_safe_sms_text(parsed_email, reply_plan, reply_id)
 
     message_body = parsed_email["guest_message_body"]
     suggested_reply = reply_plan["suggested_reply"]
@@ -173,7 +171,7 @@ def check_airbnb_email_once():
         print("Sending this message to your phone with Twilio...")
 
         reply_id = build_reply_id(message)
-        sms_text = build_sms_text(parsed_email, reply_plan)
+        sms_text = build_sms_text(parsed_email, reply_plan, reply_id)
         message_sid = send_sms(sms_text)
         save_pending_reply(message, parsed_email, reply_plan, message_sid, reply_id)
         mark_message_read(message["id"])

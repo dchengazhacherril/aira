@@ -457,15 +457,34 @@ def format_date(date_text):
     return value.strftime("%b %-d")
 
 
-def build_checkin_alert(reservation):
+def get_profile(host_memory):
+    if not host_memory:
+        return {}
+
+    return host_memory.get("profile", {})
+
+
+def build_infant_prep_line(reservation, host_memory=None):
+    if reservation.get("guest_counts", {}).get("infants", 0) <= 0:
+        return ""
+
+    baby_gear_notes = get_profile(host_memory).get("baby_gear_notes", "").strip()
+    if not baby_gear_notes:
+        return ""
+
+    return f"\nInfant prep: {baby_gear_notes}"
+
+
+def build_checkin_alert(reservation, host_memory=None):
     return (
         f"{reservation['guest_name']} checks in today at {reservation['listing_name']}.\n"
         f"Stay: {reservation['nights']} nights, checks out {format_date(reservation['checkout_date'])}.\n"
         f"Guests: {format_guest_counts(reservation['guest_counts'])}."
+        f"{build_infant_prep_line(reservation, host_memory)}"
     )
 
 
-def build_turnover_alert(checkout_reservation, checkin_reservation):
+def build_turnover_alert(checkout_reservation, checkin_reservation, host_memory=None):
     return (
         f"Turnover tomorrow: {checkout_reservation['guest_name']} checks out and "
         f"{checkin_reservation['guest_name']} checks in at {checkin_reservation['listing_name']}.\n"
@@ -473,6 +492,7 @@ def build_turnover_alert(checkout_reservation, checkin_reservation):
         f"{format_guest_counts(checkin_reservation['guest_counts'])}, "
         f"{checkin_reservation['nights']} nights, "
         f"checks out {format_date(checkin_reservation['checkout_date'])}."
+        f"{build_infant_prep_line(checkin_reservation, host_memory)}"
     )
 
 
@@ -484,7 +504,7 @@ def build_checkout_alert(reservation, next_reservation, days_until_next):
     )
 
 
-def get_due_reservation_alerts(reservations, now=None):
+def get_due_reservation_alerts(reservations, now=None, host_memory=None):
     now = now or get_local_now()
     if not is_alert_time(now):
         return []
@@ -507,7 +527,7 @@ def get_due_reservation_alerts(reservations, now=None):
                     due_alerts.append(
                         {
                             "alert_key": alert_key,
-                            "message": build_checkin_alert(reservation),
+                            "message": build_checkin_alert(reservation, host_memory),
                         }
                     )
 
@@ -551,6 +571,7 @@ def get_due_reservation_alerts(reservations, now=None):
                                     "message": build_turnover_alert(
                                         reservation,
                                         checkin_reservation,
+                                        host_memory,
                                     ),
                                 }
                             )

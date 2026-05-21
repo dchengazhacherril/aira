@@ -53,6 +53,32 @@ class MemoryLearningTest(unittest.TestCase):
 
         self.assertEqual(learned_fact["profile_field"], "trash_notes")
 
+    def test_learns_baby_gear_notes_from_edited_reply(self):
+        pending_reply = {
+            "reply_plan": {
+                "message_type": "other",
+            },
+            "parsed_email": {
+                "guest_message_body": "Just confirming you have a travel crib?",
+            },
+        }
+
+        with patch("aira.memory_learning.update_host_profile") as update_profile:
+            update_profile.return_value = {
+                "baby_gear_notes": "Travel crib and high chair are available.",
+            }
+
+            learned_fact = learn_from_edited_reply(
+                pending_reply,
+                "Yes definitely! The travel crib and a high chair will be available!",
+            )
+
+        update_profile.assert_called_once_with(
+            {"baby_gear_notes": "Travel crib and high chair are available."}
+        )
+        self.assertEqual(learned_fact["message_type"], "baby_gear")
+        self.assertEqual(learned_fact["profile_field"], "baby_gear_notes")
+
 
 if __name__ == "__main__":
     unittest.main()

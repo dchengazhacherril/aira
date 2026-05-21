@@ -5,6 +5,7 @@ from aira.email_reader import (
     get_unread_airbnb_reservation_emails,
     mark_message_read,
 )
+from aira.host_memory import load_host_memory
 from aira.reservations import (
     get_due_reservation_alerts,
     load_reservations,
@@ -51,7 +52,12 @@ def ingest_reservation_emails(max_results=10):
 
 def send_due_reservation_alerts(now=None):
     reservations = load_reservations()
-    due_alerts = get_due_reservation_alerts(reservations, now=now)
+    host_memory = load_host_memory()
+    due_alerts = get_due_reservation_alerts(
+        reservations,
+        now=now,
+        host_memory=host_memory,
+    )
 
     if not due_alerts:
         print("No reservation alerts due.")

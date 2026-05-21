@@ -5,7 +5,7 @@ from scripts.check_airbnb_email import build_sms_text
 
 
 class SmsTextTest(unittest.TestCase):
-    def test_trial_safe_sms_text_does_not_include_internal_reply_id(self):
+    def test_trial_safe_sms_text_does_not_show_reply_id_to_host(self):
         parsed_email = {
             "guest_name": "David",
             "sender_role": "co-host",
@@ -17,12 +17,13 @@ class SmsTextTest(unittest.TestCase):
             "needs_manual_review": False,
         }
 
-        sms_text = build_sms_text(parsed_email, reply_plan)
+        sms_text = build_sms_text(parsed_email, reply_plan, "4C35CD")
 
-        self.assertLessEqual(len(sms_text), 120)
+        self.assertLessEqual(len(sms_text), 320)
         self.assertNotIn("4C35CD", sms_text)
         self.assertNotIn("🏠", sms_text)
         self.assertNotIn("✨", sms_text)
+        self.assertIn("- David: Where should I put the trash?", sms_text)
         self.assertIn("Ans: Please use the bins by the garage.", sms_text)
         self.assertIn("SEND/SKIP/type reply.", sms_text)
 
@@ -43,7 +44,7 @@ class SmsTextTest(unittest.TestCase):
 
         sms_text = build_sms_text(parsed_email, reply_plan)
 
-        self.assertLessEqual(len(sms_text), 120)
+        self.assertLessEqual(len(sms_text), 320)
         self.assertIn(f"Ans: {suggested_reply}", sms_text)
 
     def test_low_confidence_sms_asks_for_plain_response(self):
@@ -60,9 +61,9 @@ class SmsTextTest(unittest.TestCase):
 
         sms_text = build_sms_text(parsed_email, reply_plan)
 
-        self.assertLessEqual(len(sms_text), 120)
-        self.assertIn("David: Where should I put the trash?", sms_text)
-        self.assertIn("Reply answer/SKIP.", sms_text)
+        self.assertLessEqual(len(sms_text), 320)
+        self.assertIn("- David: Where should I put the trash?", sms_text)
+        self.assertIn("Reply msg/SKIP.", sms_text)
         self.assertNotIn("EDIT", sms_text)
 
     def test_low_confidence_sms_keeps_more_guest_message_context(self):
@@ -82,10 +83,10 @@ class SmsTextTest(unittest.TestCase):
 
         sms_text = build_sms_text(parsed_email, reply_plan)
 
-        self.assertLessEqual(len(sms_text), 120)
-        self.assertIn("Nathan: Hi! Does there happen to be a grill out back?", sms_text)
+        self.assertLessEqual(len(sms_text), 320)
+        self.assertIn("- Nathan: Hi! Does there happen to be a grill out back?", sms_text)
         self.assertIn("And walkable coffee shop? Thanks !", sms_text)
-        self.assertIn("Reply answer/SKIP.", sms_text)
+        self.assertIn("Reply msg/SKIP.", sms_text)
         self.assertNotIn("EDIT", sms_text)
 
     def test_rich_sms_text_can_be_enabled_after_twilio_trial(self):
@@ -101,10 +102,11 @@ class SmsTextTest(unittest.TestCase):
         }
 
         with patch.dict("os.environ", {"AIRA_TRIAL_SMS_SAFE": "false"}):
-            sms_text = build_sms_text(parsed_email, reply_plan)
+            sms_text = build_sms_text(parsed_email, reply_plan, "4C35CD")
 
         self.assertIn("🏠 Listing: n/a", sms_text)
         self.assertIn("\n\n💬 David (co-host): Where should I put the trash?", sms_text)
+        self.assertNotIn("4C35CD", sms_text)
         self.assertIn("✨ Suggested reply: Please use the bins by the garage.", sms_text)
 
 

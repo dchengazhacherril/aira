@@ -119,6 +119,38 @@ May 28 – May 31, 2026
         self.assertIn("Amit", alerts[0]["message"])
         self.assertIn("4 total (3 adults, 1 infant)", alerts[0]["message"])
 
+    def test_infant_alerts_include_baby_gear_memory_when_available(self):
+        checkin_guest = make_reservation(
+            "WILLIAM",
+            "William",
+            "BeltLine",
+            "2026-05-21",
+            "2026-05-24",
+            total_guests=3,
+            adults=2,
+            infants=1,
+        )
+        host_memory = {
+            "profile": {
+                "baby_gear_notes": "Travel crib and high chair are available.",
+            }
+        }
+        now = datetime(2026, 5, 21, 12, 0, tzinfo=ZoneInfo("America/New_York"))
+
+        alerts = reservations.get_due_reservation_alerts(
+            {checkin_guest["reservation_id"]: checkin_guest},
+            now=now,
+            host_memory=host_memory,
+        )
+
+        self.assertEqual(len(alerts), 1)
+        self.assertIn("William checks in today", alerts[0]["message"])
+        self.assertIn("3 total (2 adults, 1 infant)", alerts[0]["message"])
+        self.assertIn(
+            "Infant prep: Travel crib and high chair are available.",
+            alerts[0]["message"],
+        )
+
     def test_checkout_alert_mentions_next_guest_within_seven_days(self):
         checkout_guest = make_reservation(
             "RYAN",

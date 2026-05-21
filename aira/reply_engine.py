@@ -11,6 +11,10 @@ def classify_message(message_text):
         ),
         ("parking", [r"\bparking\b", r"\bgarage\b", r"\bpark\b"]),
         ("wifi", [r"\bwifi\b", r"\bwi-fi\b", r"\binternet\b", r"\bpassword\b"]),
+        (
+            "baby_gear",
+            [r"\bcrib\b", r"\btravel crib\b", r"\bhigh chair\b", r"\binfant\b", r"\bbaby\b"],
+        ),
         ("check_in", [r"\bcheck in\b", r"\bcheck-in\b", r"\barrival\b", r"\barrive\b"]),
         ("check_out", [r"\bcheck out\b", r"\bcheck-out\b", r"\bcheckout\b"]),
         ("lockout", [r"\blocked out\b", r"\block out\b", r"\bcant get in\b", r"\bcan't get in\b", r"\bdoor code\b"]),

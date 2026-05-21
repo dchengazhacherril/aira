@@ -52,6 +52,18 @@ def parse_database_json(value):
     return value
 
 
+def merge_missing_fields(current, defaults):
+    merged = dict(current or {})
+    changed = False
+
+    for key, value in (defaults or {}).items():
+        if key not in merged and value not in ("", None):
+            merged[key] = value
+            changed = True
+
+    return merged, changed
+
+
 def get_default_host_memory(host_id):
     return {
         "host_id": host_id,
@@ -101,11 +113,49 @@ def load_host_memory_from_database(host_id):
                 return default_memory
 
     profile, preferences, playbooks = row
+    profile = parse_database_json(profile)
+    preferences = parse_database_json(preferences)
+    playbooks = parse_database_json(playbooks)
+
+    profile, profile_changed = merge_missing_fields(
+        profile,
+        default_memory["profile"],
+    )
+    preferences, preferences_changed = merge_missing_fields(
+        preferences,
+        default_memory["preferences"],
+    )
+    playbooks, playbooks_changed = merge_missing_fields(
+        playbooks,
+        default_memory["playbooks"],
+    )
+
+    if profile_changed or preferences_changed or playbooks_changed:
+        with get_database_connection() as connection:
+            ensure_host_memory_table(connection)
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE host_memory
+                    SET profile = %s,
+                        preferences = %s,
+                        playbooks = %s
+                    WHERE host_id = %s
+                    """,
+                    (
+                        Jsonb(profile),
+                        Jsonb(preferences),
+                        Jsonb(playbooks),
+                        host_id,
+                    ),
+                )
+            connection.commit()
+
     return {
         "host_id": host_id,
-        "profile": parse_database_json(profile),
-        "preferences": parse_database_json(preferences),
-        "playbooks": parse_database_json(playbooks),
+        "profile": profile,
+        "preferences": preferences,
+        "playbooks": playbooks,
     }
 
 
