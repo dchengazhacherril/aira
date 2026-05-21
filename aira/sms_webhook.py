@@ -9,7 +9,18 @@ from aira.app_logging import log_event as log_json_event
 from aira.email_sender import send_reply_email
 from aira.memory_learning import learn_from_edited_reply
 from aira.reply_flow import parse_host_reply
-from aira.reply_state import clear_pending_reply, resolve_pending_reply
+from aira.reply_state import (
+    clear_pending_reply,
+    clear_reply_clarification,
+    find_reply_id_in_text,
+    get_pending_reply_candidates,
+    load_all_pending_replies,
+    load_reply_clarification,
+    is_clarification_expired,
+    parse_clarification_selection,
+    resolve_pending_reply,
+    save_reply_clarification,
+)
 
 
 LOCAL_ENV_PATH = os.path.join(".local", ".env")
@@ -76,30 +87,94 @@ def validate_twilio_request(handler, form_data):
     )
 
 
-def handle_inbound_sms(from_phone, body_text):
-    host_phone = os.getenv("MY_PHONE_NUMBER", "")
-    normalized_body = body_text.strip()
+def truncate_text(text, max_length):
+    text = " ".join((text or "").split())
+    if len(text) <= max_length:
+        return text
 
-    log_message(f"SMS received from {from_phone}: {normalized_body}")
-    log_json_event("sms_received", from_phone=from_phone)
+    return f"{text[: max_length - 3].rstrip()}..."
 
-    if host_phone and normalize_phone_number(from_phone) != normalize_phone_number(
-        host_phone
-    ):
-        log_message("Rejected SMS because it was not from the configured host phone.")
-        log_json_event("sms_rejected", reason="unexpected_sender")
-        return "This Aira number is only configured for the host phone."
 
-    pending_reply, reply_id, resolve_error = resolve_pending_reply(body_text)
+def get_pending_reply_guest_name(pending_reply):
+    return pending_reply.get("parsed_email", {}).get("guest_name", "Guest")
+
+
+def get_pending_reply_snippet(pending_reply):
+    return pending_reply.get("parsed_email", {}).get("guest_message_body", "")
+
+
+def build_clarification_prompt(candidates):
+    lines = ["Which guest should I send this to?"]
+    for index, pending_reply in enumerate(candidates, start=1):
+        guest_name = truncate_text(get_pending_reply_guest_name(pending_reply), 16)
+        snippet = truncate_text(get_pending_reply_snippet(pending_reply), 42)
+        lines.append(f"{index}. {guest_name}: {snippet}")
+
+    lines.append("Reply 1, 2, 3, guest name, or CANCEL.")
+    return "\n".join(lines)
+
+
+def needs_reply_clarification(host_reply_text, pending_replies):
+    if len(pending_replies) <= 1:
+        return False
+
+    return not find_reply_id_in_text(host_reply_text, pending_replies)
+
+
+def maybe_start_reply_clarification(host_reply_text):
+    pending_replies = load_all_pending_replies()
+    if not needs_reply_clarification(host_reply_text, pending_replies):
+        return ""
+
+    candidates = get_pending_reply_candidates(pending_replies)
+    save_reply_clarification(
+        host_reply_text,
+        [candidate["reply_id"] for candidate in candidates],
+    )
+    log_json_event(
+        "reply_clarification_requested",
+        candidate_count=len(candidates),
+    )
+    return build_clarification_prompt(candidates)
+
+
+def resolve_clarified_reply(host_reply_text):
+    clarification = load_reply_clarification(include_expired=True)
+    if not clarification:
+        return None, "", host_reply_text, ""
+
+    if is_clarification_expired(clarification):
+        clear_reply_clarification()
+        return (
+            None,
+            "",
+            "",
+            "That clarification expired. Reply to the guest message again so I know what to send.",
+        )
+
+    pending_replies = load_all_pending_replies()
+    pending_reply, reply_id, selection_error = parse_clarification_selection(
+        host_reply_text,
+        clarification,
+        pending_replies,
+    )
+
+    if reply_id == "cancel":
+        clear_reply_clarification()
+        return None, "", "", "Canceled. No Airbnb reply was sent."
+
     if not pending_reply:
-        log_message("No pending reply context found.")
-        log_json_event("sms_rejected", reason="no_pending_reply")
-        return resolve_error
+        return None, "", "", selection_error
 
+    clear_reply_clarification()
+    return pending_reply, reply_id, clarification["host_reply_text"], ""
+
+
+def send_or_skip_pending_reply(pending_reply, reply_id, host_reply_text):
     reply_plan = pending_reply["reply_plan"]
     original_message = pending_reply["original_message"]
     parsed_reply = parse_host_reply(
-        body_text,
+        host_reply_text,
         reply_plan["suggested_reply"],
         needs_manual_review=reply_plan["needs_manual_review"],
         reply_id=reply_id,
@@ -179,6 +254,50 @@ def handle_inbound_sms(from_phone, body_text):
         return "Sent Airbnb reply. I’ll remember that for next time."
 
     return "Sent Airbnb reply."
+
+
+def handle_inbound_sms(from_phone, body_text):
+    host_phone = os.getenv("MY_PHONE_NUMBER", "")
+    normalized_body = body_text.strip()
+
+    log_message(f"SMS received from {from_phone}: {normalized_body}")
+    log_json_event("sms_received", from_phone=from_phone)
+
+    if host_phone and normalize_phone_number(from_phone) != normalize_phone_number(
+        host_phone
+    ):
+        log_message("Rejected SMS because it was not from the configured host phone.")
+        log_json_event("sms_rejected", reason="unexpected_sender")
+        return "This Aira number is only configured for the host phone."
+
+    clarified_reply, clarified_reply_id, clarified_text, clarification_response = (
+        resolve_clarified_reply(body_text)
+    )
+    if clarification_response:
+        return clarification_response
+
+    if clarified_reply:
+        return send_or_skip_pending_reply(
+            clarified_reply,
+            clarified_reply_id,
+            clarified_text,
+        )
+
+    clarification_prompt = maybe_start_reply_clarification(body_text)
+    if clarification_prompt:
+        return clarification_prompt
+
+    pending_reply, reply_id, resolve_error = resolve_pending_reply(body_text)
+    if not pending_reply:
+        log_message("No pending reply context found.")
+        log_json_event("sms_rejected", reason="no_pending_reply")
+        return resolve_error
+
+    return send_or_skip_pending_reply(
+        pending_reply,
+        reply_id,
+        body_text,
+    )
 
 
 class SmsWebhookHandler(BaseHTTPRequestHandler):

@@ -92,6 +92,8 @@ When Aira sends the outbound SMS, it saves the pending Gmail thread in `.local/p
 
 If Aira marks a message as needing manual review, `SEND` is blocked. The host can reply with the message they want to send, or `SKIP`.
 
+If more than one Airbnb reply is pending and the host sends a reply without a hidden reply ID, Aira asks which pending guest/message the reply belongs to before sending anything. Reply with the number, guest name, or `CANCEL`. Clarification prompts expire after 6 hours.
+
 When the host sends a custom reply for a learnable topic such as trash, Aira stores that answer in the host profile and can suggest it next time.
 
 ## Gmail Setup

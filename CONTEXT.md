@@ -101,6 +101,8 @@ Aira saves pending replies at `.local/pending_replies.json` after sending outbou
 
 If a reply needs manual review, `SEND` should not be accepted. The host can reply with the message they want to send, or `SKIP`.
 
+When multiple pending replies exist, an inbound host reply without a reply ID should not fall back to the newest pending message. Aira should save a clarification state, ask which guest/message the reply belongs to, and send only after the host replies with a number or unambiguous guest name. Clarification state expires after 6 hours and can be canceled with `CANCEL`.
+
 When an edited reply answers a learnable topic, such as trash, Aira should save the answer to `profile.json` and use it for future suggested replies.
 
 The `aira.sms_webhook` module receives Twilio inbound SMS webhooks, resolves the host command, sends through Gmail on the original Airbnb thread, and clears that reply ID when it sends or skips. Local Cloudflare quick-tunnel runs disable Twilio request signature validation because the signed public URL can differ from the forwarded local request. Production should use a stable public URL and re-enable validation.

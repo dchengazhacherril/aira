@@ -1,11 +1,60 @@
+import json
 import os
+import tempfile
 import unittest
 from unittest.mock import patch
 
+from aira import reply_state
 from aira import sms_webhook
 
 
 class SmsWebhookTest(unittest.TestCase):
+    def use_temp_reply_state(self):
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+
+        patches = [
+            patch.dict(os.environ, {"DATABASE_URL": ""}),
+            patch.object(reply_state, "LOCAL_DIR", temp_dir.name),
+            patch.object(
+                reply_state,
+                "PENDING_REPLIES_PATH",
+                os.path.join(temp_dir.name, "pending_replies.json"),
+            ),
+            patch.object(
+                reply_state,
+                "LEGACY_PENDING_REPLY_PATH",
+                os.path.join(temp_dir.name, "pending_reply.json"),
+            ),
+            patch.object(
+                reply_state,
+                "REPLY_CLARIFICATION_PATH",
+                os.path.join(temp_dir.name, "reply_clarification.json"),
+            ),
+        ]
+        for active_patch in patches:
+            active_patch.start()
+            self.addCleanup(active_patch.stop)
+
+    def save_pending_reply(self, reply_id, guest_name, body):
+        return reply_state.save_pending_reply(
+            {
+                "id": f"gmail-{reply_id}",
+                "thread_id": f"thread-{reply_id}",
+            },
+            {
+                "guest_name": guest_name,
+                "guest_message_body": body,
+            },
+            {
+                "suggested_reply": "Suggested reply.",
+                "needs_manual_review": False,
+                "message_type": "other",
+            },
+            f"sms-{reply_id}",
+            reply_id=reply_id,
+        )
+
     def test_signature_validation_can_be_disabled_for_manual_testing(self):
         with patch.dict(os.environ, {"TWILIO_VALIDATE_REQUESTS": "false"}):
             self.assertFalse(sms_webhook.should_validate_twilio_requests())
@@ -81,6 +130,75 @@ class SmsWebhookTest(unittest.TestCase):
             response,
             "Sent Airbnb reply. I’ll remember that for next time.",
         )
+
+    def test_multiple_pending_plain_reply_asks_which_guest(self):
+        self.use_temp_reply_state()
+        self.save_pending_reply("FIRST1", "Amit", "Can I refill it instead?")
+        self.save_pending_reply("SECOND", "Ryan", "Thanks, checking in later.")
+
+        with patch.dict(os.environ, {"MY_PHONE_NUMBER": "+15555555555"}):
+            with patch("aira.sms_webhook.send_reply_email") as send_email:
+                response = sms_webhook.handle_inbound_sms(
+                    "+15555555555",
+                    "Yes, that works.",
+                )
+
+        send_email.assert_not_called()
+        self.assertIn("Which guest should I send this to?", response)
+        self.assertIn("1. Ryan", response)
+        self.assertIn("2. Amit", response)
+
+    def test_clarified_number_sends_saved_reply_to_selected_pending_message(self):
+        self.use_temp_reply_state()
+        self.save_pending_reply("FIRST1", "Amit", "Can I refill it instead?")
+        self.save_pending_reply("SECOND", "Ryan", "Thanks, checking in later.")
+
+        with patch.dict(os.environ, {"MY_PHONE_NUMBER": "+15555555555"}):
+            sms_webhook.handle_inbound_sms("+15555555555", "Yes, that works.")
+            with patch(
+                "aira.sms_webhook.send_reply_email",
+                return_value="gmail-sent-id",
+            ) as send_email:
+                response = sms_webhook.handle_inbound_sms("+15555555555", "2")
+
+        send_email.assert_called_once()
+        original_message, reply_text = send_email.call_args.args
+        self.assertEqual(original_message["id"], "gmail-FIRST1")
+        self.assertEqual(reply_text, "Yes, that works.")
+        self.assertEqual(response, "Sent Airbnb reply.")
+        self.assertIsNone(reply_state.load_pending_reply("FIRST1"))
+
+    def test_cancel_clears_clarification_without_sending(self):
+        self.use_temp_reply_state()
+        self.save_pending_reply("FIRST1", "Amit", "Can I refill it instead?")
+        self.save_pending_reply("SECOND", "Ryan", "Thanks, checking in later.")
+
+        with patch.dict(os.environ, {"MY_PHONE_NUMBER": "+15555555555"}):
+            sms_webhook.handle_inbound_sms("+15555555555", "Yes, that works.")
+            with patch("aira.sms_webhook.send_reply_email") as send_email:
+                response = sms_webhook.handle_inbound_sms("+15555555555", "CANCEL")
+
+        send_email.assert_not_called()
+        self.assertEqual(response, "Canceled. No Airbnb reply was sent.")
+        self.assertIsNone(reply_state.load_reply_clarification())
+        self.assertIsNotNone(reply_state.load_pending_reply("FIRST1"))
+
+    def test_expired_clarification_does_not_send_to_anyone(self):
+        self.use_temp_reply_state()
+        self.save_pending_reply("FIRST1", "Amit", "Can I refill it instead?")
+        reply_state.save_reply_clarification("Yes, that works.", ["FIRST1"])
+        clarification = reply_state.load_reply_clarification()
+        clarification["created_at"] = "2000-01-01T00:00:00+00:00"
+        with open(reply_state.REPLY_CLARIFICATION_PATH, "w") as clarification_file:
+            json.dump(clarification, clarification_file)
+
+        with patch.dict(os.environ, {"MY_PHONE_NUMBER": "+15555555555"}):
+            with patch("aira.sms_webhook.send_reply_email") as send_email:
+                response = sms_webhook.handle_inbound_sms("+15555555555", "1")
+
+        send_email.assert_not_called()
+        self.assertIn("clarification expired", response)
+        self.assertIsNotNone(reply_state.load_pending_reply("FIRST1"))
 
 
 if __name__ == "__main__":
