@@ -18,6 +18,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/gmail.send",
 ]
 AIRBNB_SENDER = "express@airbnb.com"
+AIRBNB_AUTOMATED_SENDER = "automated@airbnb.com"
 LOCAL_DIR = ".local"
 CREDENTIALS_PATH = os.path.join(LOCAL_DIR, "credentials.json")
 load_dotenv(os.path.join(LOCAL_DIR, ".env"))
@@ -242,5 +243,33 @@ def get_newest_message_by_query(query):
         return None
 
 
+def get_messages_by_query(query, max_results=10):
+    try:
+        service = get_gmail_service()
+
+        results = service.users().messages().list(
+            userId="me",
+            labelIds=["INBOX"],
+            q=query,
+            maxResults=max_results,
+        ).execute()
+
+        return [
+            read_message(message["id"])
+            for message in results.get("messages", [])
+        ]
+    except HttpError as error:
+        print(f"Gmail API error: {error}")
+        return []
+
+
 def get_newest_unread_airbnb_email():
     return get_newest_message_by_query(f"from:{AIRBNB_SENDER} is:unread")
+
+
+def get_unread_airbnb_reservation_emails(max_results=10):
+    query = (
+        f"{{from:{AIRBNB_AUTOMATED_SENDER} from:{AIRBNB_SENDER}}} "
+        'is:unread ("Reservation confirmed" OR "Reservation reminder" OR arrives)'
+    )
+    return get_messages_by_query(query, max_results=max_results)

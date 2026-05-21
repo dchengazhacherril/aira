@@ -18,6 +18,17 @@ class EmailReaderTest(unittest.TestCase):
         self.assertNotIn("from:automated@airbnb.com", query)
         self.assertIn("is:unread", query)
 
+    def test_reservation_email_query_includes_automated_sender(self):
+        with patch("aira.email_reader.get_messages_by_query") as get_messages:
+            get_messages.return_value = []
+
+            email_reader.get_unread_airbnb_reservation_emails()
+
+        query = get_messages.call_args.args[0]
+        self.assertIn("from:automated@airbnb.com", query)
+        self.assertIn("from:express@airbnb.com", query)
+        self.assertIn("is:unread", query)
+
     def test_token_json_env_can_replace_local_token_file(self):
         token_data = {
             "token": "access-token",

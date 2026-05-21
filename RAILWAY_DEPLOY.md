@@ -4,6 +4,7 @@ This is the intended production-ish MVP shape:
 
 - Web service: receives Twilio inbound SMS replies.
 - Cron service: checks Gmail on a schedule and sends outbound SMS messages.
+- Reservation cron service: tracks Airbnb reservation emails and sends host alerts.
 - Postgres: shared state for pending replies and learned host memory.
 
 ## 1. Prepare Gmail JSON
@@ -27,6 +28,7 @@ If you also want Railway to have the OAuth client config available, copy the ful
 3. Add a Postgres service.
 4. Add one repo service for the webhook.
 5. Add one repo service for the checker cron.
+6. Add one repo service for the reservation cron.
 
 Railway will provide `DATABASE_URL` from the Postgres service.
 
@@ -101,7 +103,45 @@ Use this cron schedule:
 
 Use the same environment variables as the webhook service. The checker and webhook must share the same `DATABASE_URL`.
 
-## 5. Twilio
+## 5. Reservation Cron Service
+
+Create a repo service named:
+
+```bash
+aira-reservations
+```
+
+Use the same Railway start command:
+
+```bash
+python -m scripts.railway_entrypoint
+```
+
+The entrypoint detects `reservation` in the service name and runs reservation checks once.
+
+Manual equivalent:
+
+```bash
+python -m scripts.check_reservations
+```
+
+Use this cron schedule:
+
+```text
+0 * * * *
+```
+
+This checks hourly, but the code only sends reservation alerts during the noon hour in the configured timezone.
+
+Use the same environment variables as `aira-checker`. You may also set:
+
+```bash
+AIRA_TIMEZONE=America/New_York
+```
+
+Reservation state and sent-alert dedupe are stored in the shared Railway Postgres database through `DATABASE_URL`.
+
+## 6. Twilio
 
 In the Twilio Messaging Service inbound settings, set:
 
@@ -115,7 +155,7 @@ Method:
 POST
 ```
 
-## 6. Health Check
+## 7. Health Check
 
 Open the Railway service URL in a browser. The root path should return:
 

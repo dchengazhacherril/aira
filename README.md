@@ -38,6 +38,8 @@ The MVP is:
 - Send the message to the host via SMS
 - Let the host respond by SMS
 - Send the response back through email on the correct thread
+- Track Airbnb reservations from notification emails
+- Send high-value reservation alerts such as same-day turnover and check-in context
 
 If a feature does not directly support this loop, it is not part of the MVP.
 
@@ -186,6 +188,22 @@ It prints:
 
 If the message looks relevant to a listing you host or co-host, the app also sends it to your phone with Twilio.
 
+## Reservation Alerts
+
+Aira also has a separate reservation checker:
+
+```bash
+.venv/bin/python -m scripts.check_reservations
+```
+
+This reads reservation-related emails from `automated@airbnb.com` and `express@airbnb.com`, stores reservation details, and sends only high-value host alerts:
+
+- Same-day turnover alert at noon the day before
+- Check-in alert at noon on check-in day
+- Checkout alert at noon only if the next guest arrives within 7 days
+
+Reservation emails update the ledger only. Aira does not reply to `automated@airbnb.com`.
+
 ## SMS Reply Webhook
 
 The normal email-check command now runs the full local reply flow:
@@ -240,6 +258,7 @@ For an always-on MVP, deploy Aira as:
 
 - A Railway web service running `python -m scripts.railway_entrypoint`
 - A Railway cron service running `python -m scripts.railway_entrypoint`
+- A Railway cron service named `aira-reservations` running `python -m scripts.railway_entrypoint`
 - A Railway Postgres database shared by both services
 
 See `RAILWAY_DEPLOY.md` for the step-by-step setup and required environment variables.
