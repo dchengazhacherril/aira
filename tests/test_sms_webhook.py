@@ -31,6 +31,11 @@ class SmsWebhookTest(unittest.TestCase):
                 "REPLY_CLARIFICATION_PATH",
                 os.path.join(temp_dir.name, "reply_clarification.json"),
             ),
+            patch.object(
+                reply_state,
+                "RECENT_REPLY_CONTEXT_PATH",
+                os.path.join(temp_dir.name, "recent_reply_context.json"),
+            ),
         ]
         for active_patch in patches:
             active_patch.start()
@@ -145,8 +150,8 @@ class SmsWebhookTest(unittest.TestCase):
 
         send_email.assert_not_called()
         self.assertIn("Which guest should I send this to?", response)
-        self.assertIn("1. Ryan", response)
-        self.assertIn("2. Amit", response)
+        self.assertIn("1. Amit", response)
+        self.assertIn("2. Ryan", response)
 
     def test_clarified_number_sends_saved_reply_to_selected_pending_message(self):
         self.use_temp_reply_state()
@@ -159,7 +164,7 @@ class SmsWebhookTest(unittest.TestCase):
                 "aira.sms_webhook.send_reply_email",
                 return_value="gmail-sent-id",
             ) as send_email:
-                response = sms_webhook.handle_inbound_sms("+15555555555", "2")
+                response = sms_webhook.handle_inbound_sms("+15555555555", "1")
 
         send_email.assert_called_once()
         original_message, reply_text = send_email.call_args.args
@@ -199,6 +204,39 @@ class SmsWebhookTest(unittest.TestCase):
         send_email.assert_not_called()
         self.assertIn("clarification expired", response)
         self.assertIsNotNone(reply_state.load_pending_reply("FIRST1"))
+
+    def test_plain_follow_up_continues_recently_selected_thread(self):
+        self.use_temp_reply_state()
+        self.save_pending_reply("NIYATI", "Niyati", "Do you have umbrellas?")
+        self.save_pending_reply("WILLIA", "William", "The code will not work.")
+
+        with patch.dict(os.environ, {"MY_PHONE_NUMBER": "+15555555555"}):
+            sms_webhook.handle_inbound_sms(
+                "+15555555555",
+                "Unfortunately we do not have any umbrellas.",
+            )
+            with patch(
+                "aira.sms_webhook.send_reply_email",
+                return_value="gmail-sent-id",
+            ) as send_email:
+                sms_webhook.handle_inbound_sms("+15555555555", "1")
+                response = sms_webhook.handle_inbound_sms(
+                    "+15555555555",
+                    "That said, I will order one that arrives tomorrow.",
+                )
+
+        self.assertEqual(response, "Sent Airbnb reply.")
+        self.assertEqual(send_email.call_count, 2)
+        first_original_message, first_reply_text = send_email.call_args_list[0].args
+        second_original_message, second_reply_text = send_email.call_args_list[1].args
+        self.assertEqual(first_original_message["id"], "gmail-NIYATI")
+        self.assertEqual(first_reply_text, "Unfortunately we do not have any umbrellas.")
+        self.assertEqual(second_original_message["id"], "gmail-NIYATI")
+        self.assertEqual(
+            second_reply_text,
+            "That said, I will order one that arrives tomorrow.",
+        )
+        self.assertIsNotNone(reply_state.load_pending_reply("WILLIA"))
 
 
 if __name__ == "__main__":

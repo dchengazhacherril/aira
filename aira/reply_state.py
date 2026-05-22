@@ -2,14 +2,17 @@ import hashlib
 import json
 import os
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 
 LOCAL_DIR = ".local"
 LEGACY_PENDING_REPLY_PATH = os.path.join(LOCAL_DIR, "pending_reply.json")
 PENDING_REPLIES_PATH = os.path.join(LOCAL_DIR, "pending_replies.json")
 REPLY_CLARIFICATION_PATH = os.path.join(LOCAL_DIR, "reply_clarification.json")
+RECENT_REPLY_CONTEXT_PATH = os.path.join(LOCAL_DIR, "recent_reply_context.json")
 CLARIFICATION_TIMEOUT_MINUTES = 6 * 60
+RECENT_REPLY_CONTEXT_TIMEOUT_MINUTES = 20
+PENDING_REPLY_FALLBACK_MAX_AGE_DAYS = 14
 
 
 def should_use_database_storage():
@@ -60,6 +63,17 @@ def ensure_pending_replies_table(connection):
                 created_at TEXT NOT NULL,
                 host_reply_text TEXT NOT NULL,
                 candidate_reply_ids JSONB NOT NULL
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS recent_reply_contexts (
+                context_key TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                reply_id TEXT NOT NULL,
+                pending_reply JSONB NOT NULL
             )
             """
         )
@@ -182,7 +196,116 @@ def save_all_pending_replies(pending_replies):
         os.remove(LEGACY_PENDING_REPLY_PATH)
 
 
+def parse_iso_date(value):
+    if not value:
+        return None
+
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def parse_iso_datetime(value):
+    if not value:
+        return None
+
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def get_today():
+    return datetime.now(timezone.utc).date()
+
+
+def names_match(left, right):
+    left = (left or "").strip().lower()
+    right = (right or "").strip().lower()
+    if not left or not right:
+        return False
+
+    return left == right or left in right or right in left
+
+
+def listings_match(left, right):
+    left = (left or "").strip().lower()
+    right = (right or "").strip().lower()
+    if not left or not right or left == "not found" or right == "n/a":
+        return False
+
+    return left == right
+
+
+def get_matching_reservation(pending_reply, reservations):
+    parsed_email = pending_reply.get("parsed_email", {})
+    original_message = pending_reply.get("original_message", {})
+    thread_id = original_message.get("thread_id", "")
+    guest_name = parsed_email.get("guest_name", "")
+    listing_name = parsed_email.get("listing_name", "")
+
+    for reservation in reservations.values():
+        if thread_id and thread_id == reservation.get("source_thread_id", ""):
+            return reservation
+
+    for reservation in reservations.values():
+        if names_match(guest_name, reservation.get("guest_name", "")):
+            if not listing_name or listings_match(
+                listing_name,
+                reservation.get("listing_name", ""),
+            ):
+                return reservation
+
+    return None
+
+
+def is_pending_reply_stale(pending_reply, reservations=None, today=None):
+    today = today or get_today()
+    reservations = reservations or {}
+    matching_reservation = get_matching_reservation(pending_reply, reservations)
+
+    if matching_reservation:
+        checkout = parse_iso_date(matching_reservation.get("checkout_date", ""))
+        if checkout:
+            return today > checkout
+
+    created_at = parse_iso_datetime(pending_reply.get("created_at", ""))
+    if not created_at:
+        return False
+
+    return today - created_at.date() > timedelta(
+        days=PENDING_REPLY_FALLBACK_MAX_AGE_DAYS
+    )
+
+
+def load_reservation_index():
+    try:
+        from aira.reservations import load_reservations
+    except ImportError:
+        return {}
+
+    try:
+        return load_reservations()
+    except Exception:
+        return {}
+
+
+def get_active_pending_replies(pending_replies, today=None, reservations=None):
+    reservations = reservations if reservations is not None else load_reservation_index()
+    return {
+        reply_id: pending_reply
+        for reply_id, pending_reply in pending_replies.items()
+        if not is_pending_reply_stale(
+            pending_reply,
+            reservations=reservations,
+            today=today,
+        )
+    }
+
+
 def get_newest_pending_reply(pending_replies):
+    pending_replies = get_active_pending_replies(pending_replies)
     if not pending_replies:
         return None
 
@@ -193,10 +316,10 @@ def get_newest_pending_reply(pending_replies):
 
 
 def get_pending_reply_candidates(pending_replies, limit=3):
+    pending_replies = get_active_pending_replies(pending_replies)
     return sorted(
         pending_replies.values(),
         key=lambda pending_reply: pending_reply.get("created_at", ""),
-        reverse=True,
     )[:limit]
 
 
@@ -225,6 +348,7 @@ def save_pending_reply(
 
 def load_pending_reply(reply_id=None):
     pending_replies = load_all_pending_replies()
+    pending_replies = get_active_pending_replies(pending_replies)
 
     if reply_id:
         return pending_replies.get(reply_id.upper())
@@ -375,6 +499,141 @@ def clear_reply_clarification():
         os.remove(REPLY_CLARIFICATION_PATH)
 
 
+def is_recent_reply_context_expired(context):
+    expires_at = context.get("expires_at", "")
+    if not expires_at:
+        return True
+
+    try:
+        expires = datetime.fromisoformat(expires_at)
+    except ValueError:
+        return True
+
+    return datetime.now(timezone.utc) > expires
+
+
+def save_recent_reply_context_to_database(context, context_key="default"):
+    from psycopg.types.json import Jsonb
+
+    with get_database_connection() as connection:
+        ensure_pending_replies_table(connection)
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO recent_reply_contexts (
+                    context_key,
+                    created_at,
+                    expires_at,
+                    reply_id,
+                    pending_reply
+                )
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (context_key)
+                DO UPDATE SET
+                    created_at = EXCLUDED.created_at,
+                    expires_at = EXCLUDED.expires_at,
+                    reply_id = EXCLUDED.reply_id,
+                    pending_reply = EXCLUDED.pending_reply
+                """,
+                (
+                    context_key,
+                    context["created_at"],
+                    context["expires_at"],
+                    context["reply_id"],
+                    Jsonb(context["pending_reply"]),
+                ),
+            )
+        connection.commit()
+
+
+def load_recent_reply_context_from_database(context_key="default"):
+    with get_database_connection() as connection:
+        ensure_pending_replies_table(connection)
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT created_at, expires_at, reply_id, pending_reply
+                FROM recent_reply_contexts
+                WHERE context_key = %s
+                """,
+                (context_key,),
+            )
+            row = cursor.fetchone()
+
+    if not row:
+        return None
+
+    created_at, expires_at, reply_id, pending_reply = row
+    return {
+        "created_at": created_at,
+        "expires_at": expires_at,
+        "reply_id": reply_id,
+        "pending_reply": parse_database_json(pending_reply),
+    }
+
+
+def clear_recent_reply_context_from_database(context_key="default"):
+    with get_database_connection() as connection:
+        ensure_pending_replies_table(connection)
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM recent_reply_contexts WHERE context_key = %s",
+                (context_key,),
+            )
+        connection.commit()
+
+
+def save_recent_reply_context(pending_reply, reply_id):
+    now = datetime.now(timezone.utc)
+    context = {
+        "created_at": now.isoformat(),
+        "expires_at": (
+            now + timedelta(minutes=RECENT_REPLY_CONTEXT_TIMEOUT_MINUTES)
+        ).isoformat(),
+        "reply_id": reply_id,
+        "pending_reply": pending_reply,
+    }
+
+    if should_use_database_storage():
+        save_recent_reply_context_to_database(context)
+        return context
+
+    os.makedirs(LOCAL_DIR, exist_ok=True)
+    with open(RECENT_REPLY_CONTEXT_PATH, "w") as context_file:
+        json.dump(context, context_file, indent=2)
+        context_file.write("\n")
+
+    return context
+
+
+def load_recent_reply_context(include_expired=False):
+    if should_use_database_storage():
+        context = load_recent_reply_context_from_database()
+    elif os.path.exists(RECENT_REPLY_CONTEXT_PATH):
+        with open(RECENT_REPLY_CONTEXT_PATH) as context_file:
+            context = json.load(context_file)
+    else:
+        context = None
+
+    if context and is_recent_reply_context_expired(context):
+        if include_expired:
+            return context
+
+        clear_recent_reply_context()
+        return None
+
+    return context
+
+
+def clear_recent_reply_context():
+    if should_use_database_storage():
+        clear_recent_reply_context_from_database()
+        return
+
+    if os.path.exists(RECENT_REPLY_CONTEXT_PATH):
+        os.remove(RECENT_REPLY_CONTEXT_PATH)
+
+
 def parse_clarification_selection(text, clarification, pending_replies):
     normalized_text = text.strip().lower()
 
@@ -426,6 +685,7 @@ def find_reply_id_in_text(text, pending_replies=None):
 
 def resolve_pending_reply(host_reply_text):
     pending_replies = load_all_pending_replies()
+    pending_replies = get_active_pending_replies(pending_replies)
     reply_id = find_reply_id_in_text(host_reply_text, pending_replies)
 
     if reply_id:

@@ -11,14 +11,18 @@ from aira.memory_learning import learn_from_edited_reply
 from aira.reply_flow import parse_host_reply
 from aira.reply_state import (
     clear_pending_reply,
+    clear_recent_reply_context,
     clear_reply_clarification,
     find_reply_id_in_text,
+    get_active_pending_replies,
     get_pending_reply_candidates,
     load_all_pending_replies,
+    load_recent_reply_context,
     load_reply_clarification,
     is_clarification_expired,
     parse_clarification_selection,
     resolve_pending_reply,
+    save_recent_reply_context,
     save_reply_clarification,
 )
 
@@ -122,7 +126,7 @@ def needs_reply_clarification(host_reply_text, pending_replies):
 
 
 def maybe_start_reply_clarification(host_reply_text):
-    pending_replies = load_all_pending_replies()
+    pending_replies = get_active_pending_replies(load_all_pending_replies())
     if not needs_reply_clarification(host_reply_text, pending_replies):
         return ""
 
@@ -136,6 +140,56 @@ def maybe_start_reply_clarification(host_reply_text):
         candidate_count=len(candidates),
     )
     return build_clarification_prompt(candidates)
+
+
+def is_plain_follow_up_text(host_reply_text):
+    normalized_text = host_reply_text.strip().lower()
+    if not normalized_text:
+        return False
+
+    if normalized_text in {"send", "skip", "cancel"}:
+        return False
+
+    if normalized_text.isdigit():
+        return False
+
+    if normalized_text.startswith("edit "):
+        return False
+
+    return True
+
+
+def resolve_recent_reply_follow_up(host_reply_text):
+    if not is_plain_follow_up_text(host_reply_text):
+        return None, ""
+
+    recent_context = load_recent_reply_context()
+    if not recent_context:
+        return None, ""
+
+    pending_reply = recent_context.get("pending_reply")
+    reply_id = recent_context.get("reply_id", "")
+    if not pending_reply or not reply_id:
+        clear_recent_reply_context()
+        return None, ""
+
+    recent_thread_id = pending_reply.get("original_message", {}).get("thread_id", "")
+    if recent_thread_id:
+        same_thread_replies = [
+            (candidate_reply_id, candidate)
+            for candidate_reply_id, candidate in get_active_pending_replies(
+                load_all_pending_replies()
+            ).items()
+            if candidate.get("original_message", {}).get("thread_id", "")
+            == recent_thread_id
+        ]
+        if same_thread_replies:
+            return max(
+                same_thread_replies,
+                key=lambda item: item[1].get("created_at", ""),
+            )
+
+    return pending_reply, reply_id
 
 
 def resolve_clarified_reply(host_reply_text):
@@ -152,7 +206,7 @@ def resolve_clarified_reply(host_reply_text):
             "That clarification expired. Reply to the guest message again so I know what to send.",
         )
 
-    pending_replies = load_all_pending_replies()
+    pending_replies = get_active_pending_replies(load_all_pending_replies())
     pending_reply, reply_id, selection_error = parse_clarification_selection(
         host_reply_text,
         clarification,
@@ -200,6 +254,7 @@ def send_or_skip_pending_reply(pending_reply, reply_id, host_reply_text):
 
     if parsed_reply["action"] == "skip":
         clear_pending_reply(reply_id)
+        clear_recent_reply_context()
         log_message("Pending reply skipped and cleared.")
         log_json_event("reply_skipped", reply_id=reply_id)
         return parsed_reply["message"]
@@ -237,6 +292,7 @@ def send_or_skip_pending_reply(pending_reply, reply_id, host_reply_text):
             )
 
     clear_pending_reply(reply_id)
+    save_recent_reply_context(pending_reply, reply_id)
     log_message(
         "Gmail reply sent "
         f"sent_message_id={sent_reply_id} "
@@ -281,6 +337,14 @@ def handle_inbound_sms(from_phone, body_text):
             clarified_reply,
             clarified_reply_id,
             clarified_text,
+        )
+
+    recent_reply, recent_reply_id = resolve_recent_reply_follow_up(body_text)
+    if recent_reply:
+        return send_or_skip_pending_reply(
+            recent_reply,
+            recent_reply_id,
+            body_text,
         )
 
     clarification_prompt = maybe_start_reply_clarification(body_text)

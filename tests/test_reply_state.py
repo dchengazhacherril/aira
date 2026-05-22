@@ -141,6 +141,74 @@ class ReplyStateTest(unittest.TestCase):
         self.assertEqual(reply_id, "FIRST")
         self.assertEqual(pending_reply["parsed_email"]["guest_name"], "Amit")
 
+    def test_pending_reply_is_stale_after_matching_reservation_checkout(self):
+        pending_reply = {
+            "created_at": "2026-05-01T12:00:00+00:00",
+            "parsed_email": {
+                "guest_name": "Laura",
+                "listing_name": "BeltLine",
+            },
+            "original_message": {
+                "thread_id": "thread-laura",
+            },
+        }
+        reservations = {
+            "LAURA": {
+                "guest_name": "Laura",
+                "listing_name": "BeltLine",
+                "checkout_date": "2026-05-10",
+            }
+        }
+
+        self.assertTrue(
+            reply_state.is_pending_reply_stale(
+                pending_reply,
+                reservations=reservations,
+                today=datetime(2026, 5, 22, tzinfo=timezone.utc).date(),
+            )
+        )
+
+    def test_active_pending_replies_filters_stale_checkout_guests(self):
+        pending_replies = {
+            "LAURA1": {
+                "reply_id": "LAURA1",
+                "created_at": "2026-05-01T12:00:00+00:00",
+                "parsed_email": {
+                    "guest_name": "Laura",
+                    "listing_name": "BeltLine",
+                },
+                "original_message": {
+                    "thread_id": "thread-laura",
+                },
+            },
+            "NIYATI": {
+                "reply_id": "NIYATI",
+                "created_at": "2026-05-22T12:00:00+00:00",
+                "parsed_email": {
+                    "guest_name": "Niyati",
+                    "listing_name": "BeltLine",
+                },
+                "original_message": {
+                    "thread_id": "thread-niyati",
+                },
+            },
+        }
+        reservations = {
+            "LAURA": {
+                "guest_name": "Laura",
+                "listing_name": "BeltLine",
+                "checkout_date": "2026-05-10",
+            }
+        }
+
+        active = reply_state.get_active_pending_replies(
+            pending_replies,
+            reservations=reservations,
+            today=datetime(2026, 5, 22, tzinfo=timezone.utc).date(),
+        )
+
+        self.assertEqual(set(active), {"NIYATI"})
+
 
 if __name__ == "__main__":
     unittest.main()
