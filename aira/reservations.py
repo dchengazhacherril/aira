@@ -94,7 +94,8 @@ def parse_date_text(text, reference_year=None):
 
     reference_year = reference_year or datetime.now().year
     match = re.search(
-        r"\b("
+        r"\b(?:(?:Mon|Monday|Tue|Tues|Tuesday|Wed|Wednesday|Thu|Thur|Thursday|"
+        r"Fri|Friday|Sat|Saturday|Sun|Sunday),?\s+)?("
         r"Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|"
         r"Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|"
         r"Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?"
@@ -117,11 +118,15 @@ def parse_date_range(text, reference_year=None):
 
     reference_year = reference_year or datetime.now().year
     match = re.search(
-        r"\b("
+        r"\b(?:(?:Mon|Monday|Tue|Tues|Tuesday|Wed|Wednesday|Thu|Thur|Thursday|"
+        r"Fri|Friday|Sat|Saturday|Sun|Sunday),?\s+)?("
         r"Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|"
         r"Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|"
         r"Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?"
-        r")\s+(\d{1,2})\s*[–-]\s*(?:(\w+)\s+)?(\d{1,2})(?:,\s*(\d{4}))?",
+        r")\s+(\d{1,2})\s*[–-]\s*"
+        r"(?:(?:Mon|Monday|Tue|Tues|Tuesday|Wed|Wednesday|Thu|Thur|Thursday|"
+        r"Fri|Friday|Sat|Saturday|Sun|Sunday),?\s+)?"
+        r"(?:(\w+)\s+)?(\d{1,2})(?:,\s*(\d{4}))?",
         text,
         re.IGNORECASE,
     )
@@ -140,6 +145,36 @@ def parse_date_range(text, reference_year=None):
         checkout = date(year + 1, checkout.month, checkout.day)
 
     return checkin.isoformat(), checkout.isoformat()
+
+
+def parse_labeled_date(label_patterns, text, reference_year=None):
+    for label_pattern in label_patterns:
+        match = re.search(
+            rf"{label_pattern}\s*:?\s*(?:\n\s*)?([^\n]+)",
+            text,
+            re.IGNORECASE,
+        )
+        if match:
+            parsed_date = parse_date_text(match.group(1), reference_year)
+            if parsed_date:
+                return parsed_date
+
+    return ""
+
+
+def parse_nights_text(text):
+    match = re.search(r"\b(\d+)\s+night(?:s)?\b", text, re.IGNORECASE)
+    if not match:
+        return 0
+
+    return int(match.group(1))
+
+
+def add_nights(checkin_date, nights):
+    if not checkin_date or nights <= 0:
+        return ""
+
+    return (date.fromisoformat(checkin_date) + timedelta(days=nights)).isoformat()
 
 
 def extract_first(patterns, text):
@@ -232,16 +267,37 @@ def parse_reservation_email(message, reference_year=None):
 
     checkin_date, checkout_date = parse_date_range(text, reference_year)
     if not checkin_date:
+        checkin_date = parse_labeled_date(
+            [
+                r"Check(?:-| )?in(?: date)?",
+                r"Arrival(?: date)?",
+            ],
+            text,
+            reference_year,
+        )
+    if not checkin_date:
         checkin_date = parse_date_text(subject, reference_year)
     if not checkout_date:
-        checkout_date = extract_first(
+        checkout_date = parse_labeled_date(
             [
-                r"Check(?:-| )?out(?: date)?:?\s*([A-Z][a-z]+ \d{1,2}(?:,\s*\d{4})?)",
-                r"Checkout:?\s*([A-Z][a-z]+ \d{1,2}(?:,\s*\d{4})?)",
+                r"Check(?:-| )?out(?: date)?",
+                r"Departure(?: date)?",
+            ],
+            text,
+            reference_year,
+        )
+    if not checkout_date:
+        checkout_text = extract_first(
+            [
+                r"Check(?:-| )?out(?: date)?:?\s*([^\n]+)",
+                r"Checkout:?\s*([^\n]+)",
+                r"Depart(?:ure)?:?\s*([^\n]+)",
             ],
             text,
         )
-        checkout_date = parse_date_text(checkout_date, reference_year)
+        checkout_date = parse_date_text(checkout_text, reference_year)
+    if not checkout_date:
+        checkout_date = add_nights(checkin_date, parse_nights_text(text))
 
     guest_name = parse_guest_name(subject, body)
     listing_name = parse_listing_name(subject, body)

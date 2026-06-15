@@ -315,10 +315,41 @@ def get_newest_pending_reply(pending_replies):
     )
 
 
+def get_pending_reply_thread_key(pending_reply):
+    original_message = pending_reply.get("original_message", {})
+    thread_id = original_message.get("thread_id", "").strip()
+    if thread_id:
+        return f"thread:{thread_id}"
+
+    parsed_email = pending_reply.get("parsed_email", {})
+    guest_name = parsed_email.get("guest_name", "").strip().lower()
+    listing_name = parsed_email.get("listing_name", "").strip().lower()
+    if guest_name or listing_name:
+        return f"guest:{guest_name}|listing:{listing_name}"
+
+    return f"reply:{pending_reply.get('reply_id', '')}"
+
+
+def get_most_recent_reply_per_thread(pending_replies):
+    grouped = {}
+
+    for pending_reply in pending_replies.values():
+        thread_key = get_pending_reply_thread_key(pending_reply)
+        existing_reply = grouped.get(thread_key)
+        if not existing_reply or pending_reply.get("created_at", "") > existing_reply.get(
+            "created_at",
+            "",
+        ):
+            grouped[thread_key] = pending_reply
+
+    return grouped.values()
+
+
 def get_pending_reply_candidates(pending_replies, limit=3):
     pending_replies = get_active_pending_replies(pending_replies)
+    thread_replies = get_most_recent_reply_per_thread(pending_replies)
     return sorted(
-        pending_replies.values(),
+        thread_replies,
         key=lambda pending_reply: pending_reply.get("created_at", ""),
     )[:limit]
 

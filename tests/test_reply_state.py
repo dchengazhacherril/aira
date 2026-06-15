@@ -209,6 +209,50 @@ class ReplyStateTest(unittest.TestCase):
 
         self.assertEqual(set(active), {"NIYATI"})
 
+    def test_pending_reply_candidates_use_latest_message_per_thread(self):
+        pending_replies = {
+            "TAYLOR": {
+                "reply_id": "TAYLOR",
+                "created_at": "2026-06-15T10:00:00+00:00",
+                "parsed_email": {
+                    "guest_name": "Taylor",
+                    "guest_message_body": "Great! Thanks for a smooth check in.",
+                },
+                "original_message": {
+                    "thread_id": "thread-taylor",
+                },
+            },
+            "COURT1": {
+                "reply_id": "COURT1",
+                "created_at": "2026-06-15T10:05:00+00:00",
+                "parsed_email": {
+                    "guest_name": "Courtney",
+                    "guest_message_body": "Okay. Thank you so much!",
+                },
+                "original_message": {
+                    "thread_id": "thread-courtney",
+                },
+            },
+            "COURT2": {
+                "reply_id": "COURT2",
+                "created_at": "2026-06-15T10:08:00+00:00",
+                "parsed_email": {
+                    "guest_name": "Courtney",
+                    "guest_message_body": "Thank you so much. We are in Denver NC.",
+                },
+                "original_message": {
+                    "thread_id": "thread-courtney",
+                },
+            },
+        }
+
+        candidates = reply_state.get_pending_reply_candidates(pending_replies)
+
+        self.assertEqual(
+            [candidate["reply_id"] for candidate in candidates],
+            ["TAYLOR", "COURT2"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

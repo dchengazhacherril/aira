@@ -86,6 +86,64 @@ May 28 – May 31, 2026
         self.assertEqual(reservation["guest_counts"]["total_guests"], 4)
         self.assertEqual(reservation["guest_counts"]["infants"], 1)
 
+    def test_parses_split_checkin_checkout_labels(self):
+        message = {
+            "id": "gmail-maggie",
+            "thread_id": "thread-maggie",
+            "subject": "Reservation confirmed - Maggie Banks arrives Jun 14",
+            "body": """
+RESERVATION DETAILS
+2BR KING | WORLD CUP STAY NEAR STADIUM + BELTLINE
+Home - hosted by David
+Check-in
+Sun, Jun 14
+Checkout
+Wed, Jun 17, 2026
+3 adults
+3 dogs
+""",
+        }
+
+        reservation = reservations.parse_reservation_email(
+            message,
+            reference_year=2026,
+        )
+
+        self.assertEqual(reservation["guest_name"], "Maggie Banks")
+        self.assertEqual(
+            reservation["listing_name"],
+            "2BR KING | WORLD CUP STAY NEAR STADIUM + BELTLINE",
+        )
+        self.assertEqual(reservation["checkin_date"], "2026-06-14")
+        self.assertEqual(reservation["checkout_date"], "2026-06-17")
+        self.assertEqual(reservation["nights"], 3)
+        self.assertEqual(reservation["guest_counts"]["adults"], 3)
+        self.assertEqual(reservation["guest_counts"]["pets"], 3)
+
+    def test_derives_checkout_from_nights_when_checkout_label_is_missing(self):
+        message = {
+            "id": "gmail-maggie",
+            "thread_id": "thread-maggie",
+            "subject": "Reservation confirmed - Maggie Banks arrives Jun 14",
+            "body": """
+RESERVATION DETAILS
+2BR KING | WORLD CUP STAY NEAR STADIUM + BELTLINE
+Home - hosted by David
+3 nights
+3 adults
+3 pets
+""",
+        }
+
+        reservation = reservations.parse_reservation_email(
+            message,
+            reference_year=2026,
+        )
+
+        self.assertEqual(reservation["checkin_date"], "2026-06-14")
+        self.assertEqual(reservation["checkout_date"], "2026-06-17")
+        self.assertEqual(reservation["nights"], 3)
+
     def test_due_alerts_include_checkin_and_turnover_at_noon(self):
         checkout_guest = make_reservation(
             "RYAN",

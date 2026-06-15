@@ -60,6 +60,25 @@ class SmsWebhookTest(unittest.TestCase):
             reply_id=reply_id,
         )
 
+    def save_pending_reply_in_thread(self, reply_id, thread_id, guest_name, body):
+        return reply_state.save_pending_reply(
+            {
+                "id": f"gmail-{reply_id}",
+                "thread_id": thread_id,
+            },
+            {
+                "guest_name": guest_name,
+                "guest_message_body": body,
+            },
+            {
+                "suggested_reply": "Suggested reply.",
+                "needs_manual_review": False,
+                "message_type": "other",
+            },
+            f"sms-{reply_id}",
+            reply_id=reply_id,
+        )
+
     def test_signature_validation_can_be_disabled_for_manual_testing(self):
         with patch.dict(os.environ, {"TWILIO_VALIDATE_REQUESTS": "false"}):
             self.assertFalse(sms_webhook.should_validate_twilio_requests())
@@ -152,6 +171,38 @@ class SmsWebhookTest(unittest.TestCase):
         self.assertIn("Which guest should I send this to?", response)
         self.assertIn("1. Amit", response)
         self.assertIn("2. Ryan", response)
+
+    def test_clarification_prompt_shows_one_option_per_thread(self):
+        self.use_temp_reply_state()
+        self.save_pending_reply_in_thread(
+            "TAYLOR",
+            "thread-taylor",
+            "Taylor",
+            "Great! Thanks for a smooth check in.",
+        )
+        self.save_pending_reply_in_thread(
+            "COURT1",
+            "thread-courtney",
+            "Courtney",
+            "Okay. Thank you so much!",
+        )
+        self.save_pending_reply_in_thread(
+            "COURT2",
+            "thread-courtney",
+            "Courtney",
+            "Thank you so much. We are in Denver NC.",
+        )
+
+        with patch.dict(os.environ, {"MY_PHONE_NUMBER": "+15555555555"}):
+            response = sms_webhook.handle_inbound_sms(
+                "+15555555555",
+                "Sounds good.",
+            )
+
+        self.assertIn("1. Taylor", response)
+        self.assertIn("2. Courtney", response)
+        self.assertIn("We are in Denver NC", response)
+        self.assertNotIn("3. Courtney", response)
 
     def test_clarified_number_sends_saved_reply_to_selected_pending_message(self):
         self.use_temp_reply_state()
