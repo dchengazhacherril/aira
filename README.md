@@ -147,7 +147,14 @@ Set the Gmail account and outbound Airbnb identity in `.local/.env`:
 GMAIL_ACCOUNT_EMAIL=david@getaira.host
 GMAIL_SEND_AS_EMAIL=aira.cohost@gmail.com
 TWILIO_VALIDATE_REQUESTS=true
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-5.4-mini
 ```
+
+When `OPENAI_API_KEY` is set, Aira uses the OpenAI Agents SDK to draft
+guest replies from the guest message, host memory, and the deterministic
+fallback plan. If the agent call fails, Aira falls back to the local rule
+engine so the checker can still text you.
 
 ### 3. Run the app
 

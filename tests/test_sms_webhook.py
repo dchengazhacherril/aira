@@ -221,7 +221,10 @@ class SmsWebhookTest(unittest.TestCase):
         original_message, reply_text = send_email.call_args.args
         self.assertEqual(original_message["id"], "gmail-FIRST1")
         self.assertEqual(reply_text, "Yes, that works.")
-        self.assertEqual(response, "Sent Airbnb reply.")
+        self.assertEqual(
+            response,
+            "Sent Airbnb reply. I’ll remember that for next time.",
+        )
         self.assertIsNone(reply_state.load_pending_reply("FIRST1"))
 
     def test_cancel_clears_clarification_without_sending(self):
@@ -276,7 +279,10 @@ class SmsWebhookTest(unittest.TestCase):
                     "That said, I will order one that arrives tomorrow.",
                 )
 
-        self.assertEqual(response, "Sent Airbnb reply.")
+        self.assertEqual(
+            response,
+            "Sent Airbnb reply. I’ll remember that for next time.",
+        )
         self.assertEqual(send_email.call_count, 2)
         first_original_message, first_reply_text = send_email.call_args_list[0].args
         second_original_message, second_reply_text = send_email.call_args_list[1].args

@@ -1,5 +1,8 @@
 import re
 
+from aira.app_logging import log_event
+from aira.response_agent import generate_response_agent_plan
+
 
 def classify_message(message_text):
     text = message_text.lower()
@@ -14,6 +17,10 @@ def classify_message(message_text):
         (
             "baby_gear",
             [r"\bcrib\b", r"\btravel crib\b", r"\bhigh chair\b", r"\binfant\b", r"\bbaby\b"],
+        ),
+        (
+            "amenity",
+            [r"\bumbrella\b", r"\bumbrellas\b", r"\bgrill\b", r"\bshampoo\b", r"\bbody wash\b", r"\bsoap\b"],
         ),
         ("check_in", [r"\bcheck in\b", r"\bcheck-in\b", r"\barrival\b", r"\barrive\b"]),
         ("check_out", [r"\bcheck out\b", r"\bcheck-out\b", r"\bcheckout\b"]),
@@ -81,7 +88,7 @@ def build_manual_review_response():
     return "I’m not fully confident here, please review."
 
 
-def generate_reply_plan(parsed_email, host_memory):
+def generate_rule_reply_plan(parsed_email, host_memory):
     message_text = parsed_email["guest_message_body"]
     message_type = classify_message(message_text)
     suggested_reply = build_reply_from_playbook(message_type, host_memory)
@@ -95,4 +102,24 @@ def generate_reply_plan(parsed_email, host_memory):
         "suggested_reply": suggested_reply,
         "confidence": confidence,
         "needs_manual_review": confidence == "low",
+        "source": "rules",
     }
+
+
+def generate_reply_plan(parsed_email, host_memory):
+    fallback_plan = generate_rule_reply_plan(parsed_email, host_memory)
+
+    try:
+        agent_plan = generate_response_agent_plan(
+            parsed_email,
+            host_memory,
+            fallback_plan,
+        )
+    except Exception as error:
+        log_event(
+            "response_agent_failed",
+            error_type=type(error).__name__,
+        )
+        return fallback_plan
+
+    return agent_plan or fallback_plan
