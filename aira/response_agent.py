@@ -1,27 +1,11 @@
 import json
 import os
+from pathlib import Path
 
 
 DEFAULT_OPENAI_MODEL = "gpt-5.4-mini"
 CONFIDENCE_VALUES = {"high", "medium", "low"}
-
-
-AGENT_INSTRUCTIONS = """
-You draft Airbnb guest replies for a host.
-
-Rules:
-- Use only the provided host memory, reservation context, and guest message.
-- Do not invent amenities, policies, access codes, refunds, or discounts.
-- If the answer is unknown, say the host should confirm instead of guessing.
-- Keep replies concise, warm, and ready to send to a guest.
-- Do not mention internal memory, confidence, tools, JSON, or Aira.
-- Return only valid JSON with these keys:
-  suggested_reply: string
-  confidence: "high", "medium", or "low"
-  message_type: short snake_case label
-  reason: short internal explanation
-  memory_candidates: array of possible durable host facts learned from the guest message, if any
-"""
+PROMPT_PATH = Path(__file__).resolve().parent / "prompts" / "response_agent.md"
 
 
 def should_use_response_agent():
@@ -34,6 +18,10 @@ def should_use_response_agent():
 
 def get_openai_model():
     return os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL).strip() or DEFAULT_OPENAI_MODEL
+
+
+def load_agent_instructions():
+    return PROMPT_PATH.read_text(encoding="utf-8").strip()
 
 
 def compact_json(value):
@@ -102,7 +90,7 @@ def run_response_agent(prompt, model):
 
     agent = Agent(
         name="AiraResponseAgent",
-        instructions=AGENT_INSTRUCTIONS,
+        instructions=load_agent_instructions(),
         model=model,
     )
     result = Runner.run_sync(agent, prompt)

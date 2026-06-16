@@ -12,6 +12,12 @@ class ResponseAgentTest(unittest.TestCase):
         with patch.dict(os.environ, {"OPENAI_API_KEY": ""}, clear=False):
             self.assertFalse(response_agent.should_use_response_agent())
 
+    def test_load_agent_instructions_reads_prompt_file(self):
+        instructions = response_agent.load_agent_instructions()
+
+        self.assertIn("Airbnb guest replies", instructions)
+        self.assertIn("Return only valid JSON", instructions)
+
     def test_parse_agent_json_output_normalizes_plan(self):
         plan = response_agent.parse_agent_json_output(
             json.dumps(
